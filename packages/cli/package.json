@@ -1,6 +1,6 @@
 {
   "name": "grosslytics",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Install and update Grosslytics on Cloudflare, and connect the MCP stdio bridge",
   "license": "AGPL-3.0-only",
   "homepage": "https://grosslytics.com",

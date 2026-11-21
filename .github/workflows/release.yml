@@ -25,6 +25,7 @@ jobs:
       - run: bun run typecheck --filter='!@grosslytics/web'
       - run: bun scripts/release.ts --tag "$GITHUB_REF_NAME"
       - run: bunx --no-install tsc --noEmit -p apps/web/tsconfig.json
+      - run: bun run --cwd packages/seo-mcp build
       - run: bun run test
       - run: bun run --cwd packages/cli build
       - run: npm pack ./packages/cli --pack-destination .release
