@@ -253,7 +253,7 @@ export function unpack(file: string, expectedVersion?: string): string {
 }
 
 /** Confirm that the expected API, dashboard and tracker are serving on the target hostname. */
-export async function checkDeployment(host: string, version: string): Promise<void> {
+export async function checkDeployment(host: string, version: string, edition: Edition): Promise<void> {
 	const dist = join(DIR, 'release', 'web', 'dist');
 	const scripts = ['g.js', 'c.js'].map((name) => ({ name, body: readFileSync(join(dist, name)) }));
 	const hasVersion = existsSync(join(dist, 'grosslytics-version.json'));
@@ -272,7 +272,8 @@ export async function checkDeployment(host: string, version: string): Promise<vo
 			await Promise.all([
 				get('/api/auth/status').then(async (response) => {
 					const status = await response.json() as { passwordSet?: boolean; cloud?: boolean };
-					if (!status.passwordSet && !status.cloud) throw new Error('The deployed API could not confirm dashboard sign-in.');
+					const tokenOnlyOperator = edition === 'operator' && status.passwordSet === false;
+					if (!status.passwordSet && !status.cloud && !tokenOnlyOperator) throw new Error('The deployed API could not confirm dashboard sign-in.');
 				}),
 				get('/app/').then(async (response) => {
 					await response.body?.cancel();

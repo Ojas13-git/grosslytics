@@ -184,7 +184,7 @@ async function deployLocked(opts: InstallOptions, update: boolean) {
 	}
 
 	await step('Deploying the dashboard', () => wrangler(['deploy'], { cwd: web, quiet: true }));
-	await step('Checking the deployed API, dashboard, and tracker', () => checkDeployment(host, version));
+	await step('Checking the deployed API, dashboard, and tracker', () => checkDeployment(host, version, edition));
 	saveState({ ...state, version, pending: false });
 
 	note([
