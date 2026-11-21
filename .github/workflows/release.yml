@@ -1,0 +1,54 @@
+name: Release Grosslytics
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun scripts/release.ts --tag "$GITHUB_REF_NAME"
+      - run: bunx --no-install tsc --noEmit -p apps/web/tsconfig.json
+      - run: bun run test
+      - run: bun run --cwd packages/cli build
+      - run: npm pack ./packages/cli --pack-destination .release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grosslytics-release
+          path: |
+            .release/grosslytics*.tgz
+            .release/grosslytics-release.json
+          include-hidden-files: true
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: grosslytics-release
+          path: release
+      - name: Publish the tagged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --generate-notes --latest

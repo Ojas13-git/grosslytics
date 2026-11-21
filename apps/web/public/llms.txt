@@ -20,7 +20,7 @@
 - Stripe events: checkout.session.completed, invoice.paid, invoice_payment.paid, charge.refunded (full refunds).
 - One reporting currency per site: USD, EUR, GBP or INR; different currencies are never summed.
 - Webhooks: `POST /api/webhooks/{stripe|razorpay|polar|paddle|lemonsqueezy|cashfree|gumroad|paypal|dodo|revenuecat}?siteId=YOUR_SITE_ID` (signature required; Gumroad uses a key in the URL).
-- Self-host on Cloudflare: step-by-step at /start/. Full docs: /docs/.
+- Self-host on Cloudflare: npx grosslytics@latest install --free. Use npx grosslytics@latest update in the installation directory. Full docs: /docs/.
 
 ## API (requires `Authorization: Bearer <API_TOKEN>`)
 - `GET /api/stats?siteId=…&range=24h|7d|30d|90d&model=first|last|linear`: channel stats.

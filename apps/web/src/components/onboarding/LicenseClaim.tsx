@@ -43,7 +43,7 @@ export default function LicenseClaim() {
 	}, []);
 
 	const copy = (value: string, what: string) => copyText(value).then((ok) => ok && setCopied(what));
-	const command = 'npx grosslytics install';
+	const command = 'npx grosslytics@latest install --lifetime';
 	const verify = async (sessionId: string, providedCode?: string) => {
 		setBusy(true);
 		setFeedback('');

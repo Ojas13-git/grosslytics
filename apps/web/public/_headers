@@ -27,3 +27,10 @@
   Link: <https://grosslytics.com/blog/cloudflare-d1-web-analytics/>; rel="canonical"
 /blog/track-chatgpt-traffic-revenue.md
   Link: <https://grosslytics.com/blog/track-chatgpt-traffic-revenue/>; rel="canonical"
+
+/g.js
+  Cache-Control: public, max-age=300, must-revalidate
+/c.js
+  Cache-Control: public, max-age=300, must-revalidate
+/grosslytics-version.json
+  Cache-Control: no-store

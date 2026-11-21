@@ -1,7 +1,7 @@
 ---
 layout: "../../layouts/Article.astro"
 title: "How to Self-Host Revenue Analytics on Cloudflare D1"
-description: "Deploy Grosslytics on Cloudflare Workers and D1 in five steps. Understand free-tier limits, queue costs, source and licensed install paths, and verification."
+description: "Deploy Grosslytics on Cloudflare Workers and D1 in five steps. Understand free-tier limits, queue costs, prebuilt and source install paths, and verification."
 primaryKeyword: "self hosted web analytics cloudflare d1"
 format: "how-to"
 visualReview: {"decision":"include-screenshots","reason":"Real Cloudflare D1 pricing documentation explains the database allowance; the real public Grosslytics demo illustrates the reporting interface with clearly identified sample data."}
@@ -9,12 +9,12 @@ updatedDate: "2026-11-21"
 pubDate: "2026-11-08"
 ---
 
-I recommend starting a self-hosted Grosslytics deployment by checking the whole Cloudflare stack, not just Worker requests. You can use the source-build setup or the licensed installer when a downloadable release is available; Workers, D1, Queues and Durable Objects all have allowances that affect the cost. I'll walk you through sizing, deployment and checking that visits and payments connect.
+I recommend starting a self-hosted Grosslytics deployment by checking the whole Cloudflare stack, not just Worker requests. You can use the source-build setup or a prebuilt release; Workers, D1, Queues and Durable Objects all have allowances that affect the cost. I'll walk you through sizing, deployment and checking that visits and payments connect.
 
 ## Key takeaways
 
 - A free-tier infrastructure bill depends on all service limits, including the 500 MB limit for the deployment’s D1 database.
-- The source route uses bun run setup; the packaged route uses npx grosslytics@latest install with a valid license and available release.
+- Install the prebuilt free release with `npx grosslytics@latest install --free`, or build from source with `bun run setup`.
 - Queues can become the first limit: 10,000 free operations/day allow about 3,333 normal small messages before retries and other usage.
 - Validate browser events, queue persistence and signed test payments separately.
 
@@ -62,33 +62,19 @@ Use a Cloudflare account that owns your domain, an unused hostname such as `anal
 
 For a new Cloudflare account, open Workers & Pages once to initialize its workers.dev subdomain. Use a hostname with no existing A, AAAA or CNAME record; the custom-domain setup needs to attach that hostname. Choose the correct account when prompted.
 
-Select one route:
-
-- **Source build:** uses the Grosslytics repository and its build dependencies. The free setup requires a “Powered by Grosslytics” link on the tracked site’s homepage to unlock the dashboard. The [self-hosting docs](/docs/#self-host) show the link and verification step.
-- **Packaged installer:** requires a downloadable release and a valid Grosslytics Lifetime license. Check availability and terms on the [self-hosting page](/start/?plan=lifetime).
-
-The current public docs still label the packaged path as opening soon. Do not assume a purchase, npm package or source repository is accessible until you have checked. If access is unavailable, resolve that prerequisite before attempting deployment; there is no alternative download included here.
-
 ## Step 3: Deploy the API, dashboard and database together
 
-From a source checkout you can access, use the documented build-and-install route:
+Install the prebuilt free release from a dedicated directory:
 
 ```bash
-git clone https://github.com/vidneat/grosslytics.git
-cd grosslytics
-bun install
-bun run setup
+npx grosslytics@latest install --free
 ```
 
-If you already have a supported packaged release and license, the CLI route is instead:
+Register the tracked website and verify the “Powered by Grosslytics” credit in its homepage footer. Use `npx grosslytics@latest install --lifetime` with a Lifetime license. For a custom build, follow the [source installation instructions](/docs/#self-host).
 
-```bash
-npx grosslytics@latest install
-```
+Run `npx grosslytics@latest update` from the same directory for new releases. The dashboard and tracker update at their existing URLs.
 
-The `install` subcommand matters: running only `npx grosslytics@latest` does not select the deployment action. The source setup builds a local release and passes it to the same installer without requiring the downloadable licensed bundle.
-
-The installer asks for your hostname, Cloudflare zone and dashboard password, then authenticates with Cloudflare as needed. It creates `grosslytics-db`, the ingest and dead-letter queues, applies the schema, deploys the API and web Workers, and sets the API token and owner password. Allow time for downloads, builds, authorization and domain activation; no 90-second completion time is established here.
+The installer asks for your hostname, Cloudflare zone and dashboard password, then authenticates with Cloudflare as needed. It creates `grosslytics-db`, the ingest and dead-letter queues, applies the schema, deploys the API and web Workers, and sets the API token and owner password. Allow time for the download, authorization and domain activation.
 
 Keep both Workers on the analytics hostname: `analytics.example.com/api/*` must reach the API, while the web Worker serves the dashboard and tracker. The tracker normally sends events to the origin serving its script. Splitting those origins without configuring routing can produce a dashboard that loads but receives no visits. The [setup documentation](/docs/#self-host) covers the standard arrangement.
 

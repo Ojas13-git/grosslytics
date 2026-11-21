@@ -7,25 +7,44 @@ You deploy two Workers:
 | `grosslytics-edge-api` | `wrangler.toml` (repo root) | `/api/*`: collect, stats, webhooks, MCP, plus the queue consumer and Durable Object |
 | `grosslytics-web` | `apps/web/wrangler.toml` | The Astro site, `g.js`, `robots.txt`, `llms.txt` |
 
-Both must sit on **one domain**. The tracker sends beacons to `<origin of g.js>/api/event`, so `/api/*` on the site's domain has to reach the edge API. The examples below use `grosslytics.com`. Replace it with your own domain.
+Deploy both Workers to the same **analytics hostname**, such as `analytics.example.com`. The web Worker serves `/app/` and `/g.js`, and `/api/*` reaches the edge API. Register the website you want to track separately in the dashboard, for example `example.com`. The manual configuration examples use `grosslytics.com` as the deployment hostname.
 
 ---
 
-## Quick setup (recommended)
+## Install a prebuilt release
+
+In a dedicated directory, with Node.js 22.23.4 or newer, a Cloudflare account, and a domain on that account:
 
 ```bash
+npx grosslytics@latest install --free
+```
+
+Choose the analytics hostname and your dashboard password. Approve Cloudflare access when prompted. The installer creates the database and queues, applies the schema, deploys both Workers, and prints the dashboard URL and API token. Open **Workers & Pages** once if your account has never deployed a Worker. The analytics hostname needs to be available for a Cloudflare Workers custom domain.
+
+In `/app/`, add the website you want to track. Put <code>&lt;a href="https://grosslytics.com" rel="sponsored"&gt;Powered by Grosslytics&lt;/a&gt;</code> inside the footer in the HTML served by that website’s homepage. You can also use `rel="nofollow"`. Click **Verify** in the dashboard. The verifier accepts a `<footer>` or an element with `role="contentinfo"`. The dashboard, MCP, and public revenue page recheck on access after 24 hours. If the page cannot be reached, a prior verification can last up to 48 hours from its last successful check. Visits and sales are recorded throughout.
+
+### Update a deployed instance
+
+From the same directory that contains `grosslytics-install/state.json`:
+
+```bash
+npx grosslytics@latest update
+```
+
+This works for existing standard `bun run setup` installs and packaged free or Lifetime installs. The first update from a source checkout switches to the stable prebuilt release. The updater uses the existing account, hostname, database, queues, password, and Worker secrets. It checks the installed version before deploying and records a new version after checking both Workers and both tracker scripts. If a deployment stops partway through, rerun the command from the same directory. An interrupted OS process can leave an empty `grosslytics-install/deploy.lock` directory. Remove it only after confirming the first process has stopped.
+
+The updater serves new tracker code through the same `/g.js` and `/c.js` URLs. Browsers revalidate after up to five minutes. If you copied a snippet that loads `g.js` from `grosslytics.com` but sends events to your own API, change the script URL once to `https://YOUR_ANALYTICS_HOST/g.js` to follow your own releases. Do the same for the optional `c.js`. Keep your existing site ID and event URL.
+
+### Build from source
+
+Use Node.js 22.23.4 or newer and Bun. Run these commands inside the repository:
+
+```bash
+bun install
 bun run setup
 ```
 
-Needs Bun and Node.js 22.23.4+ (the installer prompts run on Node; Bun 1.4 drops typed input). One command does steps 2 to 10 below. It builds the code, signs in to Cloudflare (click **Allow**), creates the D1 database and both queues, runs every migration, deploys the API (`<host>/api/*`) and the website (custom domain `<host>`), and sets a random `API_TOKEN` plus your dashboard password. It prints the dashboard address and the `API_TOKEN` once, so save the token.
-
-This free setup sets `REQUIRE_FOOTER = "1"` on the API. Add `<a href="https://grosslytics.com" rel="sponsored">Powered by Grosslytics</a>` to the homepage footer of the tracked site. You can also use `rel="nofollow"`. Use Verify on `/app` to unlock the dashboard, settings, MCP and public page. The link is checked daily. Tracking continues while access is locked. Lifetime installs (`npx grosslytics install`) and grosslytics.com itself don't set the variable.
-
-Before the first run:
-- **New Cloudflare account:** open Workers & Pages in the dashboard once, so Cloudflare creates your workers.dev subdomain. Deploys are refused without it.
-- **Your hostname must have no DNS records** (A, AAAA or CNAME). Cloudflare won't attach a custom domain over existing records.
-
-It keeps its settings in `grosslytics-install/state.json`, which git ignores. Run it again in the same folder to update; that doesn't change your password or API_TOKEN. The manual steps below show what it does, for when you need to change one part.
+Use this route for custom source or `PUBLIC_*` settings. To update a custom build, pull or merge the source changes, install dependencies, and run `bun run setup` again with the same build settings. Keep `grosslytics-install/state.json` in the original folder. It includes private installation details and is ignored by git.
 
 ## 0. Run everything locally first
 
@@ -337,7 +356,7 @@ Cloud still has a 100,000-event plan, calendar-month usage in UTC, and manual ac
 
 ## Selling Lifetime licenses ($29 once)
 
-This is also only for you, the operator. A buyer pays, gets a license key on `/license`, and runs `npx grosslytics install`. That command downloads the release with the key, signs in to their Cloudflare (they click Allow), creates the database and queues, runs the migrations, deploys the API and dashboard to a hostname they choose, and sets their dashboard password. Running it again in the same folder updates them to your latest release.
+This is also only for you, the operator. A buyer pays, gets a license key on `/license`, and runs `npx grosslytics@latest install --lifetime`. They can run it from an existing free installation folder to switch that deployment to Lifetime. That command downloads the release with the key, signs in to their Cloudflare (they click Allow), creates the database and queues, runs the migrations, deploys the API and dashboard to a hostname they choose, and sets their dashboard password. Buyers use `npx grosslytics@latest update` in the same folder for future releases.
 
 1. Create the R2 bucket that holds releases, and add it to the root `wrangler.toml` of **your** deployment:
    ```bash
@@ -360,6 +379,12 @@ This is also only for you, the operator. A buyer pays, gets a license key on `/l
 7. Publish the CLI to npm as `grosslytics` (`cd packages/cli && bun run build && npm publish`). Until then, `npx grosslytics` doesn't exist, and buyers would have to run `node packages/cli/dist/index.js install`.
 
 The installer runs on macOS and Linux and needs Node 22.12+. Full refunds revoke future license downloads, including when the refund arrives before the successful checkout event. A buyer's site also serves the Grosslytics homepage at `/`, with the dashboard at `/app`.
+
+## Publish an official release
+
+Push a stable tag such as `v0.2.0` on the release commit. The [release workflow](.github/workflows/release.yml) builds the Workers and scripts once, runs checks, and publishes the archive, SHA-256 manifest, and packed CLI to the tagged GitHub release. Installers read the latest manifest and verify the checksum of the pinned archive before unpacking it. The tagged source is included through GitHub’s source archives.
+
+For a CLI version change, publish the generated `grosslytics-<cli-version>.tgz` to npm from the account that owns the npm package. Publish the public GitHub release before advertising the new free install command. To make the same version available to Lifetime customers, upload that release’s `grosslytics.tgz` as `grosslytics-releases/latest.tgz` in the operator’s R2 bucket. Reuse the tagged archive for both channels.
 
 ## Security update rollout
 

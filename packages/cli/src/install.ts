@@ -1,7 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { pbkdf2Sync, randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, pbkdf2Sync, randomBytes } from 'node:crypto';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { RELEASE_ARCHIVE, RELEASES_URL, type ReleaseManifest } from '@grosslytics/shared/release';
+
+export type Edition = 'free' | 'lifetime' | 'operator';
 
 /** Saved next to the bundle so re-running `install` updates the same deployment instead of asking again. */
 export interface InstallState {
@@ -9,6 +12,11 @@ export interface InstallState {
 	host: string;
 	zone: string;
 	version?: string;
+	edition?: Edition;
+	accountId?: string;
+	databaseId?: string;
+	releaseOrigin?: string;
+	pending?: boolean;
 	passwordSet?: boolean;
 	/** Operator only (grosslytics.com): the R2 bucket that Lifetime keys download releases from. Set by hand in state.json. */
 	releasesBucket?: string;
@@ -18,16 +26,19 @@ export const DIR = 'grosslytics-install';
 const STATE = join(DIR, 'state.json');
 
 export const loadState = (): Partial<InstallState> => {
-	try {
-		return JSON.parse(readFileSync(STATE, 'utf8'));
-	} catch {
-		return {};
-	}
+	if (!existsSync(STATE)) return {};
+	return JSON.parse(readFileSync(STATE, 'utf8')) as InstallState;
 };
 export const saveState = (s: InstallState) => {
-	writeFileSync(STATE, JSON.stringify(s, null, 2), { mode: 0o600 });
-	chmodSync(STATE, 0o600);
+	const staged = `${STATE}.tmp`;
+	writeFileSync(staged, JSON.stringify(s, null, 2), { mode: 0o600 });
+	chmodSync(staged, 0o600);
+	renameSync(staged, STATE);
 };
+
+export function savedEdition(s: Partial<InstallState>): Edition | undefined {
+	return s.edition ?? (s.host === 'grosslytics.com' ? 'operator' : s.license ? 'lifetime' : s.host ? 'free' : undefined);
+}
 
 /** Same format as the API's hashPassword (apps/edge-api/src/routes/auth.ts), so /app accepts it. */
 export function hashPassword(password: string): string {
@@ -41,7 +52,7 @@ export const guessZone = (host: string) => host.split('.').slice(-2).join('.');
 export const isHost = (h: string) => /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(h);
 
 /** The edge API: pre-bundled, served at <host>/api/*. SQLite-backed Durable Objects work on the Workers Free and Paid plans. */
-export function apiToml(s: Pick<InstallState, 'host' | 'zone' | 'releasesBucket'> & { requireFooter?: boolean }, databaseId: string): string {
+export function apiToml(s: Pick<InstallState, 'host' | 'zone' | 'releasesBucket' | 'edition' | 'version'> & { requireFooter?: boolean }, databaseId: string): string {
 	return `name = "grosslytics-edge-api"
 main = "index.js"
 no_bundle = true
@@ -109,7 +120,7 @@ crons = ["17 3 * * *"]
 ENVIRONMENT = "production"
 TRACKER_ORIGIN = "https://${s.host}"
 ${s.host === 'grosslytics.com' ? 'PLUNK_FROM_EMAIL = "support@grosslytics.com"\n' : ''}
-${s.requireFooter ? 'REQUIRE_FOOTER = "1"\n' : ''}${s.releasesBucket ? `\n[[r2_buckets]]\nbinding = "RELEASES"\nbucket_name = "${s.releasesBucket}"\n` : ''}`;
+${s.requireFooter === undefined ? '' : `REQUIRE_FOOTER = "${Number(s.requireFooter)}"\n`}${s.version && s.edition ? `GROSSLYTICS_VERSION = ${JSON.stringify(s.version)}\nGROSSLYTICS_EDITION = ${JSON.stringify(s.edition)}\n` : ''}${s.releasesBucket ? `\n[[r2_buckets]]\nbinding = "RELEASES"\nbucket_name = "${s.releasesBucket}"\n` : ''}`;
 }
 
 /** The website and dashboard, on <host> as a custom domain (Cloudflare creates the DNS record). */
@@ -157,15 +168,21 @@ export const versionHost = (version: { resources?: { bindings?: Array<{ name?: s
 	}
 };
 
-/** Which hostname this Cloudflare account's Grosslytics API already serves, or null when there is none (or it can't tell). */
+/** Which hostname this account's Grosslytics API serves, or null when there is no deployment. */
 export function deployedHost(): string | null {
+	let deployments: Array<{ versions?: Array<{ version_id?: string }> }>;
 	try {
-		const deployments = JSON.parse(wrangler(['deployments', 'list', '--name', 'grosslytics-edge-api', '--json'], { quiet: true }));
-		const id = deployments.at(-1)?.versions?.[0]?.version_id;
-		return id ? versionHost(JSON.parse(wrangler(['versions', 'view', id, '--name', 'grosslytics-edge-api', '--json'], { quiet: true }))) : null;
-	} catch {
-		return null; // no API deployed here yet
+		deployments = JSON.parse(wrangler(['deployments', 'list', '--name', 'grosslytics-edge-api', '--json'], { quiet: true }));
+	} catch (error) {
+		const output = String((error as { stderr?: Buffer }).stderr ?? '');
+		if (/\[code:\s*10007\]/i.test(output)) return null;
+		throw error;
 	}
+	if (!deployments.length) return null;
+	const id = deployments.at(-1)?.versions?.[0]?.version_id;
+	const host = id && versionHost(JSON.parse(wrangler(['versions', 'view', id, '--name', 'grosslytics-edge-api', '--json'], { quiet: true })));
+	if (!host) throw new Error('Could not read the hostname of the existing Grosslytics Worker.');
+	return host;
 }
 
 /** Runs a wrangler command whose failure only means "already exists". Any other failure is rethrown with wrangler's message. */
@@ -187,22 +204,92 @@ export function databaseId(): string {
 
 /** Downloads and unpacks the release bundle. Throws the server's message (bad key, no release) on failure. */
 export async function download(origin: string, license: string): Promise<string> {
-	const res = await fetch(`${origin.replace(/\/$/, '')}/api/license/download`, { headers: { authorization: `Bearer ${license}` } });
+	const res = await fetch(`${origin.replace(/\/$/, '')}/api/license/download`, {
+		headers: { authorization: `Bearer ${license}` },
+		signal: AbortSignal.timeout(60_000),
+	});
 	if (!res.ok) {
 		const body = (await res.json().catch(() => ({}))) as { error?: string };
 		throw new Error(body.error || `Download failed (HTTP ${res.status}).`);
 	}
+	return unpackDownload(Buffer.from(await res.arrayBuffer()));
+}
+
+export async function downloadFree(manifest: ReleaseManifest): Promise<string> {
+	const res = await fetch(`${RELEASES_URL}/download/${manifest.version}/${RELEASE_ARCHIVE}`, { signal: AbortSignal.timeout(60_000) });
+	if (!res.ok) throw new Error(`Release download failed (HTTP ${res.status}).`);
+	const archive = Buffer.from(await res.arrayBuffer());
+	if (createHash('sha256').update(archive).digest('hex') !== manifest.sha256) {
+		throw new Error('The downloaded archive does not match the release checksum.');
+	}
+	return unpackDownload(archive, manifest.version);
+}
+
+function unpackDownload(archive: Buffer, expectedVersion?: string): string {
 	const file = join(DIR, 'release.tgz');
-	writeFileSync(file, Buffer.from(await res.arrayBuffer()));
-	return unpack(file);
+	writeFileSync(file, archive);
+	return unpack(file, expectedVersion);
 }
 
 /** Unpacks a release bundle into DIR/release and returns its version. */
-export function unpack(file: string): string {
-	rmSync(join(DIR, 'release'), { recursive: true, force: true });
-	mkdirSync(join(DIR, 'release'), { recursive: true });
-	execFileSync('tar', ['-xzf', file, '-C', join(DIR, 'release')]);
-	const version = join(DIR, 'release', 'VERSION');
-	if (!existsSync(version)) throw new Error('The download was not a Grosslytics release.');
-	return readFileSync(version, 'utf8').trim();
+export function unpack(file: string, expectedVersion?: string): string {
+	const release = join(DIR, 'release');
+	const staged = join(DIR, 'release-staging');
+	rmSync(staged, { recursive: true, force: true });
+	mkdirSync(staged);
+	try {
+		execFileSync('tar', ['-xzf', file, '-C', staged]);
+		for (const path of ['VERSION', 'migrate.sql', 'api/index.js', 'web/dist/_worker.js/index.js', 'web/dist/g.js', 'web/dist/c.js']) {
+			if (!existsSync(join(staged, path))) throw new Error(`The Grosslytics archive is missing ${path}.`);
+		}
+		const version = readFileSync(join(staged, 'VERSION'), 'utf8').trim();
+		if (!version || (expectedVersion && version !== expectedVersion)) throw new Error('The archive version does not match the release.');
+		rmSync(release, { recursive: true, force: true });
+		renameSync(staged, release);
+		return version;
+	} finally {
+		rmSync(staged, { recursive: true, force: true });
+	}
+}
+
+/** Confirm that the expected API, dashboard and tracker are serving on the target hostname. */
+export async function checkDeployment(host: string, version: string): Promise<void> {
+	const dist = join(DIR, 'release', 'web', 'dist');
+	const scripts = ['g.js', 'c.js'].map((name) => ({ name, body: readFileSync(join(dist, name)) }));
+	const hasVersion = existsSync(join(dist, 'grosslytics-version.json'));
+	const deadline = Date.now() + 85_000;
+	let reason = '';
+	while (Date.now() < deadline) {
+		try {
+			const get = async (path: string) => {
+				const response = await fetch(`https://${host}${path}`, {
+					headers: { 'cache-control': 'no-cache' },
+					signal: AbortSignal.timeout(7500),
+				});
+				if (!response.ok || new URL(response.url).hostname !== host) throw new Error(`${path} did not respond on ${host} (HTTP ${response.status}).`);
+				return response;
+			};
+			await Promise.all([
+				get('/api/auth/status').then(async (response) => {
+					const status = await response.json() as { passwordSet?: boolean; cloud?: boolean };
+					if (!status.passwordSet && !status.cloud) throw new Error('The deployed API could not confirm dashboard sign-in.');
+				}),
+				get('/app/').then(async (response) => {
+					await response.body?.cancel();
+					if (!response.headers.get('content-type')?.includes('text/html')) throw new Error('The dashboard did not return HTML.');
+				}),
+				...scripts.map(({ name, body }) => get(`/${name}?release=${encodeURIComponent(version)}`).then(async (response) => {
+					if (!Buffer.from(await response.arrayBuffer()).equals(body)) throw new Error(`The deployed ${name} differs from the release.`);
+				})),
+				...(hasVersion ? ['/api/release', '/grosslytics-version.json'].map((path) => get(path).then(async (response) => {
+					if ((await response.json() as { version?: string }).version !== version) throw new Error(`${path} is still serving another release.`);
+				})) : []),
+			]);
+			return;
+		} catch (error) {
+			reason = (error as Error).message;
+			await new Promise((resolve) => setTimeout(resolve, 3000));
+		}
+	}
+	throw new Error(`Could not verify the deployment. ${reason} Run the same command again to resume.`);
 }

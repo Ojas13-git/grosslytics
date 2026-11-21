@@ -34,6 +34,7 @@ import { $dashboardFilters, setAttributionModel, setDateRange, setRevenueMode } 
 import { apiFetch, fetchJourney, loadConnection, logout, rangeQuery, saveConnection, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from './api';
 import { Milestones, Heatmap, MainChart, MiniBars, ProfitBridge, type Point } from './charts';
 import { ApiTokens, CloudBilling, Connect, FooterGate, InstallSnippet, PaymentWebhooks } from './connect';
+import { isReleaseTag, RELEASES_URL } from '@grosslytics/shared/release';
 import { buildDemo, DEMO_NOW, flag, journeyFor, type Dimension, type Filter, type Metric, type Mode, type Model, type Range } from './demo';
 import { gatewayLabel, JourneyDrawer, LiveFeed } from './live';
 import { AdSpendCsv, AiCrawlers, ClickMap, StripeImport, Waitlist } from './extras';
@@ -131,10 +132,35 @@ export default function DashboardIsland({ site = 'acme.io', variant = 'full', so
 /** /app: connect once (API URL + token + site), then the live workspace. */
 const ADD_SITE = '__add_site';
 
+function ReleaseNotice({ api }: { api: string }) {
+	const [release, setRelease] = useState<{ version: string; latest?: string } | null>(null);
+	useEffect(() => {
+		const controller = new AbortController();
+		fetch(`${api.replace(/\/$/, '')}/api/release?check=1`, { signal: controller.signal, cache: 'no-cache' })
+			.then((response) => response.ok ? response.json() : null)
+			.then(setRelease, () => {});
+		return () => controller.abort();
+	}, [api]);
+	if (!release?.version) return null;
+	return (
+		<aside className="mx-auto mt-4 max-w-7xl px-5 text-[13px] text-ink-2" aria-label="Installed version">
+			<span>Grosslytics {release.version}</span>
+			{isReleaseTag(release.latest) && (
+				<span> · <a className="text-accent underline" href={`${RELEASES_URL}/tag/${release.latest}`}>{release.latest} release notes</a>. From your install folder, run <code>npx grosslytics@latest update</code>.</span>
+			)}
+		</aside>
+	);
+}
+
 function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
 	const [conn, setConn] = useState<Connection | null | undefined>(undefined);
 	const [sites, setSites] = useState<SiteInfo[]>([]);
 	const [picking, setPicking] = useState(false);
+	const lockSite = useCallback((siteId: string) => setSites((list) => (
+		list.some((site) => site.id === siteId && !site.locked)
+			? list.map((site) => site.id === siteId ? { ...site, locked: true } : site)
+			: list
+	)), []);
 	useEffect(() => setConn(loadConnection()), []);
 	useEffect(() => {
 		if (!conn) return;
@@ -153,15 +179,20 @@ function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
 	if (!conn) return <div className="px-5 pt-10"><Connect onConnect={connect} /></div>;
 	if (picking) return <div className="px-5 pt-10"><Connect start={conn} onConnect={connect} onCancel={() => setPicking(false)} onSignOut={() => connect(null)} /></div>;
 	const current = sites.find((s) => s.id === conn.siteId);
+	const release = <ReleaseNotice key={conn.api} api={conn.api} />;
 	if (current?.locked) {
 		return (
-			<div className="px-5 pt-10">
-				<FooterGate conn={conn} site={current} onVerified={() => setSites((list) => list.map((s) => (s.id === conn.siteId ? { ...s, locked: false } : s)))} onSwitch={() => setPicking(true)} />
-			</div>
+			<>
+				{release}
+				<div className="px-5 pt-10">
+					<FooterGate key={current.id} conn={conn} site={current} onVerified={() => setSites((list) => list.map((s) => (s.id === conn.siteId ? { ...s, locked: false } : s)))} onSwitch={() => setPicking(true)} />
+				</div>
+			</>
 		);
 	}
 	return (
 		<>
+		{release}
 		{!conn.token && <CloudBilling />}
 		<Workspace
 			key={JSON.stringify([conn.api, conn.token, conn.siteId, current?.timezone])}
@@ -192,6 +223,7 @@ function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
 				setSites((list) => list.map((s) => (s.id === conn.siteId ? { ...s, retention: days } : s)));
 			}}
 			payments={current?.payments}
+			onFooterLocked={lockSite}
 		/>
 		</>
 	);
@@ -213,6 +245,7 @@ function Workspace(props: {
 	onTimezone?: (timezone: string) => Promise<void>;
 	retention?: number;
 	onRetention?: (days: number) => Promise<void>;
+	onFooterLocked?: (siteId: string) => void;
 }) {
 	const { site, variant, source, conn } = props;
 	// The /app page gets a full-width sticky toolbar; share pages and the homepage preview sit inside their own box
@@ -252,7 +285,10 @@ function Workspace(props: {
 	const q = { range, custom, model, mode, filters };
 	const demo = useMemo(() => (source === 'demo' ? buildDemo(range, model, mode, filters, custom) : null), [source, range, model, mode, filters, custom]);
 	const remote = useRemoteDashboard(source === 'api' && conn ? { conn } : source === 'share' ? { shareDomain: site } : null, q, refresh);
-	const d: DashboardData | null = demo ?? remote.data;
+	useEffect(() => {
+		if (remote.footer && conn) props.onFooterLocked?.(conn.siteId);
+	}, [remote.footer, conn?.siteId, props.onFooterLocked]);
+	const d: DashboardData | null = demo ?? (remote.footer ? null : remote.data);
 	const money = useMoney(d?.currency);
 
 	// Live: the owner gets the real socket; the demo simulates; share pages have none (presence is private).
@@ -493,6 +529,7 @@ function Workspace(props: {
 					)}
 				</div>
 			</Panel>
+			<InstallSnippet key={conn.siteId} siteId={conn.siteId} api={conn.api} inSettings />
 			{props.payments && <PaymentWebhooks key={conn.siteId} conn={conn} connected={props.payments} />}
 			<StripeImport conn={conn} onDone={() => setRefresh((r) => r + 1)} />
 			<AdSpendCsv conn={conn} onSaved={() => setRefresh((r) => r + 1)} />

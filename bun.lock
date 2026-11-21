@@ -54,12 +54,13 @@
     },
     "packages/cli": {
       "name": "grosslytics",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "bin": {
         "grosslytics": "dist/index.js",
       },
       "devDependencies": {
         "@clack/prompts": "^0.9.0",
+        "@grosslytics/shared": "workspace:*",
         "@types/node": "^22.0.0",
         "commander": "^13.1.0",
         "picocolors": "^1.1.1",

@@ -12,7 +12,8 @@
     "./types": "./src/types.ts",
     "./dashboard": "./src/dashboard.ts",
     "./money": "./src/money.ts",
-    "./privacy": "./src/privacy.ts"
+    "./privacy": "./src/privacy.ts",
+    "./release": "./src/release.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

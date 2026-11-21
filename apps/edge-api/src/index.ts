@@ -17,6 +17,7 @@ import type { EnrichedEvent } from '@grosslytics/shared/types';
 import { isCloud } from './cloud.js';
 import type { Bindings } from './env.js';
 import { migrateSiteSecrets } from './site-secrets.js';
+import { isNewerRelease, latestRelease } from '@grosslytics/shared/release';
 
 export { SiteLiveHub } from './durable-object.js';
 
@@ -33,6 +34,14 @@ app.use('*', (c, next) => c.req.header('upgrade')?.toLowerCase() === 'websocket'
 
 // Health check
 app.get('/', (c) => c.text('Grosslytics Edge API Online', 200));
+app.get('/api/release', async (c) => {
+	const { GROSSLYTICS_VERSION: version, GROSSLYTICS_EDITION: edition } = c.env;
+	if (!version) return c.json({ error: 'Release information is unavailable.' }, 404);
+	if (c.req.query('check') !== '1' || edition !== 'free') return c.json({ version, edition }, 200, { 'Cache-Control': 'no-store' });
+	const release = await latestRelease().catch(() => null);
+	const latest = release && isNewerRelease(release.version, version) ? release.version : null;
+	return c.json({ version, edition, latest }, 200, { 'Cache-Control': release ? 'public, max-age=3600' : 'no-store' });
+});
 
 // Owner APIs use a bearer token or session. WebSocket upgrades use a one-time ticket.
 // The /app owner signs in with a password (session cookie); API_TOKEN is the master key; gl_pat_ tokens are read-only per site.

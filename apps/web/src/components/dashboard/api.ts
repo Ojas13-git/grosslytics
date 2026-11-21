@@ -7,6 +7,11 @@ import type { JourneyStep } from './demo';
 /** Where the edge API lives: PUBLIC_API_URL if set, else this site's own /api/* route (in development, astro.config proxies it to `wrangler dev`). */
 export const DEFAULT_API = (import.meta.env?.PUBLIC_API_URL as string | undefined) || '';
 
+export function trackerSnippet(siteId: string, api: string, scriptOrigin = api): string {
+	const base = api.replace(/\/$/, '');
+	return `<script defer src="${scriptOrigin.replace(/\/$/, '')}/g.js" data-site-id="${siteId}" data-api="${base}/api/event"></script>`;
+}
+
 export interface Connection {
 	api: string;
 	/** Empty when signed in with the dashboard password: the HttpOnly session cookie authenticates instead */

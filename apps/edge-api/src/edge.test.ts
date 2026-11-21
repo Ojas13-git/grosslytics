@@ -1354,8 +1354,12 @@ test('footer link: free installs accept qualified links and relock when the link
 		expect(sites.map((s: any) => s.locked)).toEqual([true, false]);
 		expect((await call('/api/stats/dashboard?siteId=s2')).status).toBe(200);
 
-		// An empty link and a look-alike host don't count
+		// Empty links, look-alike hosts and links outside a footer don't count.
 		expect((await verify()).status).toBe(422);
+		for (const container of ['main', 'footer hidden']) {
+			html = `<${container}><a href="https://grosslytics.com/">Powered by Grosslytics</a></${container.split(' ')[0]}>`;
+			expect((await verify()).status).toBe(422);
+		}
 		down = true;
 		expect(((await (await verify()).json()) as any).error).toContain('Could not load');
 		down = false;
@@ -1363,20 +1367,30 @@ test('footer link: free installs accept qualified links and relock when the link
 			html = `<footer><a class="x" href="https://www.grosslytics.com/?ref=acme" rel="${rel}">Powered by <b>Grosslytics</b></a></footer>`;
 			expect((await verify()).status).toBe(200);
 		}
+		html = '<div role="contentinfo"><a href="https://grosslytics.com/">Powered by Grosslytics</a></div>';
+		expect((await verify()).status).toBe(200);
 		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(200);
 		expect((await call('/api/share/acme.io')).status).toBe(200);
 		expect(((await (await call('/api/stats/sites')).json()) as any).sites[0].locked).toBe(false);
 
-		// The daily check keeps access with a qualified link or a temporary outage and relocks if the link is removed
-		const age = () => sqlite.exec('UPDATE site_footer SET checked_at = checked_at - 90000');
+		const age = (seconds = 90000) => sqlite.exec(`UPDATE site_footer SET checked_at = checked_at - ${seconds}`);
 		age();
 		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(200);
 		age();
 		down = true;
+		const lastVerified = sqlite.query('SELECT checked_at FROM site_footer WHERE site_id = ?').get('s1');
+		expect((await call('/api/share/acme.io')).status).toBe(200);
 		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(200);
-		age();
+		expect(sqlite.query('SELECT checked_at FROM site_footer WHERE site_id = ?').get('s1')).toEqual(lastVerified);
+		age(86400);
+		expect((await call('/api/share/acme.io')).status).toBe(404);
+		expect((await call('/api/mcp?site=s1', { method: 'POST', body: '{}' })).status).toBe(403);
+
 		down = false;
+		expect((await verify()).status).toBe(200);
+		age();
 		html = '<footer></footer>';
+		expect((await call('/api/share/acme.io')).status).toBe(404);
 		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(403);
 		expect(sqlite.query('SELECT COUNT(*) n FROM site_footer').get()).toEqual({ n: 0 });
 	} finally {

@@ -117,15 +117,21 @@ Stripe, Paddle, … ──▶ /api/webhooks ┘                                 
 
 ## Self-host (free)
 
-Needs [Bun](https://bun.sh), Node.js 22.23.4+, a free Cloudflare account and a domain on it. For each site you track, add `<a href="https://grosslytics.com" rel="sponsored">Powered by Grosslytics</a>` to the homepage footer. You can also use `rel="nofollow"`. The dashboard opens after verification, and the link is checked daily.
+Use Node.js 22.23.4 or newer, a free Cloudflare account, and a domain in that account.
 
 ```bash
-git clone https://github.com/vidneat/grosslytics.git
-cd grosslytics && bun install
-bun run setup
+npx grosslytics@latest install --free
 ```
 
-`bun run setup` asks for a hostname and a dashboard password, signs you in to Cloudflare, creates the database and queues, and deploys everything. Run it again to update. Step-by-step and manual setup: [DEPLOY.md](DEPLOY.md) and [grosslytics.com/docs](https://grosslytics.com/docs/).
+The installer deploys the API, dashboard, and tracker at an analytics hostname such as `analytics.example.com`. In the dashboard, register the website you want to track, such as `example.com`. Add the credit to the tracked homepage’s served HTML inside its footer and click **Verify**.
+
+```html
+<a href="https://grosslytics.com" rel="sponsored">Powered by Grosslytics</a>
+```
+
+You can also use `rel="nofollow"`. Tracking continues while access is locked. Grosslytics rechecks the link on the first protected request after 24 hours.
+
+To update, run `npx grosslytics@latest update` from the original install folder. The deployment updates the dashboard and tracker at their existing URLs. Source builds and manual setup are documented in [DEPLOY.md](DEPLOY.md).
 
 ### Run it locally
 
@@ -155,7 +161,7 @@ Then ask things like *"which channel earned the most per visitor this month?"*. 
 | Who runs it | You, on your Cloudflare | We do | You, on your Cloudflare |
 | Features | Everything, unlimited sites | Everything, up to 100,000 events/month | Everything, unlimited sites |
 | Footer link | "Powered by Grosslytics" on your site, required | Not needed | Not needed |
-| Extras | Community help on GitHub | 14-day free trial, no card | `npx grosslytics install` without git or Bun, priority email support, commercial license |
+| Extras | Community help on GitHub | 14-day free trial, no card | Priority email support and commercial license |
 
 [Start Indie Cloud](https://grosslytics.com/start?plan=cloud) · [Get Lifetime](https://grosslytics.com/start?plan=lifetime)
 

@@ -220,13 +220,11 @@ export function middleware(req: NextRequest) {
 				<h2 id="self-host" class={h2}>Self-hosting</h2>
 				<p>Grosslytics runs entirely in your own Cloudflare account: Workers, D1, Queues and a Durable Object. The free Workers plan is enough for most sites.</p>
 				<p>The <a class="text-accent hover:underline" href="/blog/cloudflare-d1-web-analytics/">Cloudflare D1 deployment guide</a> covers free-plan limits and how to verify that browser events reach the database.</p>
-				<p>For free self-hosting, add <code>{FOOTER_SNIPPET}</code> to the homepage footer of each site you track. You can also use <code>rel="nofollow"</code>. The dashboard opens after verification, and visits and sales are recorded in the meantime. The link is checked daily. Removing it locks the dashboard again. Lifetime installs skip this.</p>
-				<p>You need Bun, Node.js 22.23.4 or newer, and a domain on Cloudflare. From a copy of the code, one command sets everything up: it signs in to Cloudflare (you click Allow), creates the database and queues, deploys the API and dashboard to a hostname on your domain, and sets your dashboard password. Run it again to update.</p>
-				<pre class={pre}><code>{`git clone https://github.com/vidneat/grosslytics.git
-cd grosslytics && bun install
-bun run setup`}</code></pre>
-				<p>The <a class="text-accent hover:underline" href="/#pricing">Lifetime license</a> (opening soon) will do the same without the code: <code class={code}>npx grosslytics install</code>.</p>
-				<p>On first visit, a self-hosted dashboard asks for your API_TOKEN once and a password; after that you sign in with the password. Repeated sign-in attempts are limited per network.</p>
+				<p>Install the prebuilt release with Node.js 22.23.4 or newer and a domain on Cloudflare. The installer deploys Grosslytics to an analytics hostname such as <code>analytics.example.com</code> and sets your dashboard password.</p>
+				<pre class={pre}><code>npx grosslytics@latest install --free</code></pre>
+				<p>In the dashboard, register the website you want to track, such as <code>example.com</code>. Add <code>{FOOTER_SNIPPET}</code> inside the footer in the HTML served by that website’s homepage. You can also use <code>rel="nofollow"</code>. Click Verify to open the dashboard. Grosslytics rechecks on access after 24 hours. Visits and sales are recorded while dashboard access is locked.</p>
+				<p>From the same folder, run <code>npx grosslytics@latest update</code> to update the dashboard and tracker. The tracker keeps its existing URL. If your old snippet loads the script from grosslytics.com, switch its script URL to your analytics hostname once to follow your own updates.</p>
+				<p>Use <code>npx grosslytics@latest install --lifetime</code> with a Lifetime license. For custom builds, follow the <a class="text-accent hover:underline" href="https://github.com/vidneat/grosslytics/blob/HEAD/DEPLOY.md">source installation instructions</a>.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">

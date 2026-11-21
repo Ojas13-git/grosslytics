@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, KeyRound, LockKeyhole, Plug } from 'lucide-react';
-import { apiFetch, DEFAULT_API, logout, type Connection, type SiteInfo } from './api';
+import { apiFetch, DEFAULT_API, logout, trackerSnippet, type Connection, type SiteInfo } from './api';
 import { FOOTER_SNIPPET } from '@grosslytics/shared/constants';
 import { REPORTING_CURRENCIES } from '@grosslytics/shared/money';
 import { copyText } from '../../lib/clipboard';
@@ -304,7 +304,7 @@ export function FooterGate({ conn, site, onVerified, onSwitch }: { conn: Connect
 				</div>
 			</div>
 			<p className="text-[14px] text-ink-2">
-				Add the attribution link below to the homepage footer of <strong className="font-medium text-ink">{site.domain}</strong>. You can also use <code className="font-mono text-[12.5px]">rel="nofollow"</code>.
+				Add this credit inside the footer in the HTML served at <strong className="break-all font-medium text-ink">https://{site.domain}/</strong>. You can also use <code className="font-mono text-[12.5px]">rel="nofollow"</code>.
 			</p>
 			<div className="mt-3 flex items-start gap-2 rounded-xl bg-band p-3">
 				<code className="min-w-0 flex-1 break-all font-mono text-[12.5px] text-ink-2">{FOOTER_SNIPPET}</code>
@@ -312,7 +312,7 @@ export function FooterGate({ conn, site, onVerified, onSwitch }: { conn: Connect
 					<Copy size={13} aria-hidden="true" />{copied ? 'Copied' : 'Copy'}
 				</button>
 			</div>
-			<p className="mt-3 text-[13px] text-ink-2">Visits and sales are still being recorded while you do this. The link is checked again each day, and removing it locks the dashboard.</p>
+			<p className="mt-3 text-[13px] text-ink-2">Visits and sales are still recorded while access is locked. Grosslytics checks the credit again on the first request after 24 hours.</p>
 			<button type="button" className="btn btn-primary mt-4 w-full" onClick={verify} disabled={busy}>{busy ? 'Checking your site…' : 'I added it, verify'}</button>
 			{error && <p className="mt-3 text-[13px] text-down" role="alert">{error}</p>}
 			<div className="mt-4 flex items-center justify-between border-t border-line pt-3 text-[13px]">
@@ -323,14 +323,16 @@ export function FooterGate({ conn, site, onVerified, onSwitch }: { conn: Connect
 	);
 }
 
-/** Shown on an empty site: the one line to paste into the site's <head>. */
-export function InstallSnippet({ siteId, api }: { siteId: string; api: string }) {
+/** The tracker snippet for the owner's site. */
+export function InstallSnippet({ siteId, api, inSettings = false }: { siteId: string; api: string; inSettings?: boolean }) {
 	const origin = typeof location === 'undefined' ? '' : location.origin;
-	const snippet = `<script defer src="${origin}/g.js" data-site-id="${siteId}" data-api="${api.replace(/\/$/, '')}/api/event"></script>`;
+	const base = api || origin;
+	const snippet = trackerSnippet(siteId, base, DEFAULT_API === base || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/.test(base) ? origin : base);
 	const [copied, setCopied] = useState(false);
 	return (
 		<section className="rounded-xl bg-card p-6 ring-1 ring-line" aria-label="Install the tracker">
-			<h2 className="text-[17px] font-semibold">No visits yet. Add this to your site's &lt;head&gt;:</h2>
+			<h2 className="text-[17px] font-semibold">{inSettings ? 'Tracker script' : "No visits yet. Add this to your site's <head>:"}</h2>
+			{inSettings && <p className="mt-1 text-[13px] text-ink-2">Copy this tag into your tracked site’s &lt;head&gt;. If you already installed a tag with a different script URL, replace it with this one.</p>}
 			<div className="mt-3 flex items-start gap-2 rounded-xl bg-band p-3">
 				<code className="min-w-0 flex-1 break-all font-mono text-[12.5px] text-ink-2">{snippet}</code>
 				<button

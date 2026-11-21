@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight, Check, Copy, Loader2 } from 'lucide-react';
-import { apiFetch, DEFAULT_API, loadConnection, saveConnection, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from '../dashboard/api';
+import { apiFetch, DEFAULT_API, loadConnection, saveConnection, trackerSnippet, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from '../dashboard/api';
 import { FOOTER_SNIPPET } from '@grosslytics/shared/constants';
 import { Connect, FooterGate } from '../dashboard/connect';
 import { copyText } from '../../lib/clipboard';
@@ -80,7 +80,7 @@ function Paid({ plan }: { plan: Exclude<Plan, 'self'> }) {
 	if (url)
 		return (
 			<div className="rounded-[22px] bg-card p-7 text-center ring-1 ring-line">
-				<p className="text-ink-2">{plan === 'lifetime' ? 'Pay once. You get a license key, then run npx grosslytics install: it signs in to your Cloudflare, creates everything and deploys it, with no git or Bun. The same command updates it later. Lifetime also includes priority email support and a commercial license (no AGPL obligations).' : 'Pay, then add one script tag. We host everything else.'}</p>
+				<p className="text-ink-2">{plan === 'lifetime' ? 'Pay once. You get a license key, then run npx grosslytics@latest install --lifetime. It signs in to Cloudflare and deploys the API and dashboard. Run npx grosslytics@latest update in the same folder for new releases. Lifetime also includes priority email support and a commercial license (no AGPL obligations).' : 'Pay, then add one script tag. We host everything else.'}</p>
 				<a className="btn btn-primary mt-5" href={url}>Continue to checkout <ArrowRight size={15} aria-hidden="true" /></a>
 			</div>
 		);
@@ -304,10 +304,11 @@ function SelfHost() {
 					</div>
 					{where === 'cloudflare' ? (
 						<>
-							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a>, <a className="text-accent hover:underline" href="https://nodejs.org">Node.js</a> 22.23.4 or newer, a free Cloudflare account, and a domain on that account. About five minutes.</p>
-							<CopyBlock label="1. Get the code" code={`git clone ${REPO}.git\ncd grosslytics && bun install`} />
-							<CopyBlock label="2. Set up and deploy" code="bun run setup" />
-							<p className="text-[13px]">It asks for a hostname (such as analytics.yourstartup.com) and a dashboard password, then opens Cloudflare: click <strong>Allow</strong>. It creates the database and queues, deploys, and prints your dashboard address and API_TOKEN. Run it again later to update.</p>
+							<p>Use Node.js 22.23.4 or newer, a free Cloudflare account, and a domain in that account.</p>
+							<CopyBlock label="Install" code="npx grosslytics@latest install --free" />
+							<p className="text-[13px]">Choose a deployment hostname such as <code>analytics.yourstartup.com</code> and a dashboard password. Approve Cloudflare access when prompted. The installer prints your dashboard address and API token. You'll register the website you want to track, such as <code>yourstartup.com</code>, in the next step.</p>
+							<CopyBlock label="Update from the same folder" code="npx grosslytics@latest update" />
+							<p className="text-[13px]">For custom builds, follow the <a className="text-accent hover:underline" href={`${REPO}/blob/HEAD/DEPLOY.md`}>source installation instructions</a>.</p>
 							<p className="text-[13px]">Brand-new Cloudflare account? Open <a className="text-accent hover:underline" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages">Workers &amp; Pages</a> once first, so Cloudflare creates your workers.dev subdomain. If your hostname already has DNS records, delete them first.</p>
 						</>
 					) : (
@@ -321,16 +322,16 @@ function SelfHost() {
 				</Step>
 
 				<Step n={2} title="Connect this dashboard and add your site" status={statuses[1]!} open={isOpen(1)} onToggle={toggle(1)} summary={conn && <>Connected to <code className="font-mono text-[12px]">{conn.api}</code>, site <code className="font-mono text-[12px]">{conn.siteId}</code>. <button type="button" className="text-accent hover:underline" onClick={() => changeSite(null)}>Change</button></>}>
-					<p>Open your own dashboard at <code className="font-mono text-[13px]">https://your-hostname/app</code> and sign in with the password you chose. It shows your tracker snippet and payment webhooks. Or connect it here with your API URL and the API_TOKEN that setup printed, and follow the next steps on this page.</p>
+					<p>Open your own dashboard at <code className="font-mono text-[13px]">https://your-hostname/app</code> and sign in with the password you chose. Register the domain you want to track there to get your tracker snippet and payment webhooks. You can also connect here with your API URL and the API_TOKEN that setup printed, and follow the next steps on this page.</p>
 					<div className="-mx-2">
 						<Connect remote onConnect={changeSite} />
 					</div>
 				</Step>
 
-				<Step n={3} title="Verify your footer link" status={statuses[2]!} open={isOpen(2)} onToggle={toggle(2)} summary={ready ? 'Your site is ready to continue.' : 'Free self-hosting requires a “Powered by Grosslytics” link on your homepage.'}>
+				<Step n={3} title="Verify your footer link" status={statuses[2]!} open={isOpen(2)} onToggle={toggle(2)} summary={ready ? 'Your site is ready to continue.' : 'Free self-hosting requires a “Powered by Grosslytics” link on the tracked homepage.'}>
 					{!conn ? (
 						<>
-							<p>Add this link to your homepage footer for free self-hosting. Connect your site in step 2 to verify it.</p>
+							<p>Add this link inside the footer of the website you want to track. Register the website in step 2 to see the homepage URL Grosslytics will check.</p>
 							<CopyBlock label="Footer link" code={FOOTER_SNIPPET} />
 						</>
 					) : siteError ? (
@@ -355,7 +356,7 @@ function SelfHost() {
 
 				<Step n={4} title="Add the tracker to your site" status={statuses[3]!} open={isOpen(3)} onToggle={toggle(3)} summary={hasVisit && 'Visits are arriving.'}>
 					<p>Paste this into the <code className="font-mono text-[13px]">&lt;head&gt;</code> of every page. It's about 1.8 KB compressed and sets no cookies.</p>
-					<CopyBlock label="HTML" code={`<script defer src="${origin}/g.js" data-site-id="${siteId}" data-api="${api}/api/event"></script>`} />
+					<CopyBlock label="HTML" code={trackerSnippet(siteId, api, where === 'local' ? origin : api)} />
 					<p className="text-[13px]">Then open your site in a new tab. This step turns green as soon as the visit arrives.</p>
 					<p className="text-[13px]">Still waiting? If your site sends a Content-Security-Policy header, add <code className="font-mono">{api || origin}</code> to its <code className="font-mono">script-src</code> and <code className="font-mono">connect-src</code>. Otherwise the browser blocks the tracker and only says so in the console.</p>
 				</Step>

@@ -78,6 +78,8 @@ export default defineConfig({
 		ogCards,
 	],
 	vite: {
+		// Published bundles use defaults even when built from a checkout with local .env files.
+		envDir: process.env.GROSSLYTICS_OFFICIAL_BUILD === '1' ? false : undefined,
 		plugins: [tailwindcss()],
 		// Dev mirrors production: /api/* on the site's own origin, so the dashboard's session cookie is first-party
 		server: { proxy: { '/api': { target: 'http://localhost:8787', ws: true } } },

@@ -19,6 +19,8 @@ export interface Bindings {
 	CLOUD?: string;
 	/** "1" on free self-hosted installs: a site's dashboard opens only once its homepage links to grosslytics.com (footer.ts) */
 	REQUIRE_FOOTER?: string;
+	GROSSLYTICS_VERSION?: string;
+	GROSSLYTICS_EDITION?: string;
 	/** Signing secret of the Stripe webhook for Grosslytics' own subscriptions (not a customer's payments) */
 	STRIPE_BILLING_WEBHOOK_SECRET?: string;
 	/** Signing secret (whsec_…) of the Dodo Payments webhook for Grosslytics' own Lifetime and Cloud sales */
