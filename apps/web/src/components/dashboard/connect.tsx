@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, KeyRound, LockKeyhole, Plug } from 'lucide-react';
 import { apiFetch, DEFAULT_API, logout, type Connection, type SiteInfo } from './api';
+import { FOOTER_SNIPPET } from '@grosslytics/shared/constants';
 import { REPORTING_CURRENCIES } from '@grosslytics/shared/money';
 import { copyText } from '../../lib/clipboard';
 import { CHECKOUT_CLOUD, CLOUD_PRICE } from '../../lib/checkout';
@@ -36,6 +37,8 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 	const [setupKey, setSetupKey] = useState('');
 	const [password, setPassword] = useState('');
 	const [email, setEmail] = useState('');
+	const [code, setCode] = useState('');
+	const [verifyingEmail, setVerifyingEmail] = useState(false);
 	// Hosted Cloud: customers sign up with an email instead of an owner password
 	const [cloud, setCloud] = useState(false);
 	const [sites, setSites] = useState<SiteInfo[] | null>(null);
@@ -80,6 +83,12 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 		run(async () => {
 			const res = await fetch(`${location.origin}/api/auth/${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 			if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error || `Request failed (${res.status}).`);
+			if (res.status === 202) {
+				setVerifyingEmail(true);
+				return;
+			}
+			setVerifyingEmail(false);
+			setCode('');
 			setSetupKey('');
 			setPassword('');
 			const r = await apiFetch<{ sites: SiteInfo[] }>({ api: location.origin, token: '' }, '/api/stats/sites');
@@ -102,6 +111,19 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 		});
 
 	const field = 'w-full rounded-xl bg-band px-3.5 py-2.5 text-[15px] ring-1 ring-line outline-none focus:ring-2 focus:ring-accent';
+	const verifyField = verifyingEmail && (
+		<div>
+			<label className="block text-[13px] font-medium">
+				Verification code
+				<input className={`${field} mt-1`} value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" maxLength={40} required autoFocus />
+				<span className="mt-1 block text-[12px] font-normal text-ink-3">Check your email for a code. It expires after 15 minutes.</span>
+			</label>
+			<button type="button" className="mt-2 text-[13px] text-accent hover:underline" disabled={busy} onClick={() => {
+				setCode('');
+				auth(mode === 'signup' ? 'signup' : 'login', { email, password });
+			}}>Resend code</button>
+		</div>
+	);
 	return (
 		<div className="mx-auto max-w-[460px] rounded-xl bg-card p-7 ring-1 ring-line">
 			<div className="mb-5 flex items-center gap-3">
@@ -148,7 +170,7 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 					className="space-y-3"
 					onSubmit={(e) => {
 						e.preventDefault();
-						auth('login', cloud ? { email, password } : { password });
+						auth('login', cloud ? { email, password, code } : { password });
 					}}
 				>
 					{cloud ? (
@@ -163,9 +185,10 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 						Password
 						<input className={`${field} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" required autoFocus={!cloud} />
 					</label>
-					<button className="btn btn-primary w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+					{verifyField}
+					<button className="btn btn-primary w-full" disabled={busy}>{busy ? 'Signing in…' : verifyingEmail ? 'Verify and sign in' : 'Sign in'}</button>
 					{cloud ? (
-						<p className="text-[13px] text-ink-2">New here? <button type="button" className="text-accent hover:underline" onClick={() => (setMode('signup'), setError(''))}>Start a free trial</button></p>
+						<p className="text-[13px] text-ink-2">New here? <button type="button" className="text-accent hover:underline" onClick={() => { setMode('signup'); setError(''); setVerifyingEmail(false); setCode(''); }}>Start a free trial</button></p>
 					) : (
 						<button type="button" className="text-[13px] text-accent hover:underline" onClick={() => (setMode('reset'), setError(''))}>Forgot password?</button>
 					)}
@@ -177,7 +200,7 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 					className="space-y-3"
 					onSubmit={(e) => {
 						e.preventDefault();
-						auth('signup', { email, password });
+						auth('signup', { email, password, code });
 					}}
 				>
 					<label className="block text-[13px] font-medium">
@@ -189,8 +212,9 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 						<input className={`${field} mt-1`} value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="new-password" minLength={10} required />
 						<span className="mt-1 block text-[12px] font-normal text-ink-3">At least 10 characters.</span>
 					</label>
-					<button className="btn btn-primary w-full" disabled={busy}>{busy ? 'Creating your account…' : 'Start free trial'}</button>
-					<p className="text-[13px] text-ink-2">Have an account? <button type="button" className="text-accent hover:underline" onClick={() => (setMode('login'), setError(''))}>Sign in</button></p>
+					{verifyField}
+					<button className="btn btn-primary w-full" disabled={busy}>{busy ? 'Please wait…' : verifyingEmail ? 'Verify and start free trial' : 'Send verification code'}</button>
+					<p className="text-[13px] text-ink-2">Have an account? <button type="button" className="text-accent hover:underline" onClick={() => { setMode('login'); setError(''); setVerifyingEmail(false); setCode(''); }}>Sign in</button></p>
 				</form>
 			)}
 
@@ -260,8 +284,6 @@ export function Connect({ onConnect, initialError, start, onCancel, onSignOut, r
 	);
 }
 
-export const FOOTER_SNIPPET = '<a href="https://grosslytics.com">Powered by Grosslytics</a>';
-
 /** Free self-hosted installs: the dashboard stays shut until the site's homepage carries the footer link (the API enforces it; see footer.ts). */
 export function FooterGate({ conn, site, onVerified, onSwitch }: { conn: Connection; site: SiteInfo; onVerified: () => void; onSwitch: () => void }) {
 	const [copied, setCopied] = useState(false);
@@ -282,7 +304,7 @@ export function FooterGate({ conn, site, onVerified, onSwitch }: { conn: Connect
 				</div>
 			</div>
 			<p className="text-[14px] text-ink-2">
-				The free plan is paid for with a link. Add this to the footer of <strong className="font-medium text-ink">{site.domain}</strong>, on the home page, as a normal link (no <code className="font-mono text-[12.5px]">rel="nofollow"</code>):
+				Add the attribution link below to the homepage footer of <strong className="font-medium text-ink">{site.domain}</strong>. You can also use <code className="font-mono text-[12.5px]">rel="nofollow"</code>.
 			</p>
 			<div className="mt-3 flex items-start gap-2 rounded-xl bg-band p-3">
 				<code className="min-w-0 flex-1 break-all font-mono text-[12.5px] text-ink-2">{FOOTER_SNIPPET}</code>
@@ -338,6 +360,7 @@ export function ApiTokens({ conn }: { conn: Connection }) {
 	const [tokens, setTokens] = useState<ApiToken[] | null>(null);
 	const [name, setName] = useState('');
 	const [fresh, setFresh] = useState<{ name: string; token: string } | null>(null);
+	const [crawlerKey, setCrawlerKey] = useState('');
 	const [copied, setCopied] = useState('');
 	const [error, setError] = useState('');
 	const api = conn.api.replace(/\/$/, '');
@@ -411,6 +434,17 @@ export function ApiTokens({ conn }: { conn: Connection }) {
 				<input className="min-w-0 flex-1 rounded-xl bg-band px-3 py-2 text-[13px] ring-1 ring-line outline-none focus:ring-2 focus:ring-accent" placeholder="Name, e.g. Claude Code" value={name} onChange={(e) => setName(e.target.value)} aria-label="New token name" maxLength={80} required />
 				<button className="btn btn-primary shrink-0 !py-2 !text-[13px]">Create token</button>
 			</form>
+			<div className="mt-4 border-t border-line pt-3 text-[13px]">
+				<button type="button" className="text-accent hover:underline" onClick={() => act(async () => {
+					const response = await apiFetch<{ key: string }>(conn, `/api/stats/sites/${encodeURIComponent(conn.siteId)}/crawl-key`, { method: 'POST', body: '{}' });
+					setCrawlerKey(response.key);
+				})}>Generate crawler key</button>
+				<p className="mt-1 text-ink-2">Generating a key replaces the previous key. Store it on the server that reports AI crawler requests.</p>
+				{crawlerKey && <div className="mt-2 flex flex-wrap items-center gap-2">
+					<code className="break-all font-mono">{crawlerKey}</code>
+					<button type="button" className="text-accent hover:underline" onClick={() => copy(crawlerKey, 'crawler')}>{copied === 'crawler' ? 'Copied' : 'Copy'}</button>
+				</div>}
+			</div>
 			{error && <p className="mt-2 text-[13px] text-down" role="alert">{error}</p>}
 		</section>
 	);

@@ -111,9 +111,9 @@ export const events = sqliteTable(
 // 5. PAYMENTS: Idempotent Multi-Touch Revenue & LTV Ledger
 // ─────────────────────────────────────────────────────────────────────────────
 export const payments = sqliteTable(
-	'payments',
+	'payment_records',
 	{
-		paymentId: text('payment_id').primaryKey(),
+		paymentId: text('payment_id').notNull(),
 		siteId: text('site_id').notNull(),
 		gateway: text('gateway').notNull(),
 		visitorId: text('visitor_id'),
@@ -140,8 +140,9 @@ export const payments = sqliteTable(
 		createdAt: integer('created_at').default(sql`(unixepoch())`),
 	},
 	(table) => [
-		index('idx_payments_site_created').on(table.siteId, table.createdAt, table.status),
-		index('idx_payments_ltv').on(table.siteId, table.firstTouchSource, table.createdAt),
+		primaryKey({ columns: [table.siteId, table.gateway, table.paymentId] }),
+		index('idx_payment_records_site_created').on(table.siteId, table.createdAt, table.status),
+		index('idx_payment_records_ltv').on(table.siteId, table.firstTouchSource, table.createdAt),
 	],
 );
 

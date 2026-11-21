@@ -71,7 +71,7 @@ Grosslytics connects the two. A tiny script records visits, your payment provide
 - AI crawler reports (GPTBot, ClaudeBot, PerplexityBot and others)
 
 **Built for developers**
-- 1.5 KB tracker that sets no cookies
+- 1.8 KB tracker that sets no cookies
 - Sends events with `fetch` to your own domain, so common ad-block lists don't drop them
 - REST API with read-only, per-site tokens
 - MCP server, so Claude Code, Cursor or Windsurf can answer questions about your numbers
@@ -117,7 +117,7 @@ Stripe, Paddle, … ──▶ /api/webhooks ┘                                 
 
 ## Self-host (free)
 
-Needs [Bun](https://bun.sh), Node.js 18+, a free Cloudflare account and a domain on it. The free setup asks for one thing back: each site you track carries `<a href="https://grosslytics.com">Powered by Grosslytics</a>` in its footer (a normal link, no `rel="nofollow"`). The dashboard for a site opens once that link is found on its home page, and it is checked daily.
+Needs [Bun](https://bun.sh), Node.js 22.23.4+, a free Cloudflare account and a domain on it. For each site you track, add `<a href="https://grosslytics.com" rel="sponsored">Powered by Grosslytics</a>` to the homepage footer. You can also use `rel="nofollow"`. The dashboard opens after verification, and the link is checked daily.
 
 ```bash
 git clone https://github.com/vidneat/grosslytics.git

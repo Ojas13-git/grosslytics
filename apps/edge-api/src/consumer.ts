@@ -59,5 +59,8 @@ export async function cleanup(db: D1Database, now = Math.floor(Date.now() / 1000
 		db.prepare('DELETE FROM processed_messages WHERE processed_at < ?').bind(now - RECEIPT_DAYS * 86400),
 		db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
 		db.prepare('DELETE FROM account_sessions WHERE expires_at <= ?').bind(now),
+		db.prepare('DELETE FROM live_tickets WHERE expires_at <= ?').bind(now),
+		db.prepare('DELETE FROM email_proofs WHERE expires_at <= ?').bind(now),
+		db.prepare('DELETE FROM site_crawl_keys WHERE site_id NOT IN (SELECT site_id FROM sites)'),
 	]);
 }

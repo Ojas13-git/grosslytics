@@ -205,11 +205,11 @@ function seed(): string {
 
 	console.log(`Seeding ${DOMAIN}: ${visitors.length} visitors, ${events.length} events, ${payments.length} payments over ${DAYS} days`);
 	return [
-		...['events', 'visitors', 'payments', 'hourly_rollups', 'ad_spend', 'annotations', 'sites'].map((t) => `DELETE FROM ${t} WHERE site_id = ${q(SITE)};`),
+		...['events', 'visitors', 'payment_records', 'hourly_rollups', 'ad_spend', 'annotations', 'sites'].map((t) => `DELETE FROM ${t} WHERE site_id = ${q(SITE)};`),
 		`INSERT INTO sites (site_id, domain, name, public_share_enabled) VALUES (${q(SITE)}, ${q(DOMAIN)}, 'Acme', 1);`,
 		chunks('visitors', 'site_id, visitor_id, customer_email_hash, first_seen_at, first_source, first_category, first_utm_source, first_utm_medium, first_utm_campaign, first_landing_page, last_seen_at, last_source, last_category, last_utm_source, last_utm_campaign, country, city, device_type, os, browser, total_sessions, total_active_read_sec, max_scroll_pct', visitors),
 		chunks('events', 'site_id, visitor_id, session_id, event_type, event_name, source, scroll_depth, duration_sec, created_at', events),
-		chunks('payments', 'payment_id, site_id, gateway, visitor_id, customer_email_hash, customer_email_masked, plan_name, gross_amount_cents, fee_amount_cents, net_amount_cents, currency, status, is_renewal, first_touch_source, last_touch_source, country, city, time_to_convert_hours, buyer_read_sec, buyer_scroll_pct, created_at', payments),
+		chunks('payment_records', 'payment_id, site_id, gateway, visitor_id, customer_email_hash, customer_email_masked, plan_name, gross_amount_cents, fee_amount_cents, net_amount_cents, currency, status, is_renewal, first_touch_source, last_touch_source, country, city, time_to_convert_hours, buyer_read_sec, buyer_scroll_pct, created_at', payments),
 		chunks('hourly_rollups', 'site_id, hour_bucket, source, category, landing_page, country, visitors_count, sessions_count, pageviews_count, active_read_sec_sum, scroll_pct_sum', rollupRows),
 		chunks('ad_spend', 'site_id, source, spend_date, amount_cents', ads),
 		`INSERT INTO annotations (site_id, at, label) VALUES (${q(SITE)}, ${dayStart - 22 * 86400 + 9 * 3600}, 'Launched on Product Hunt'), (${q(SITE)}, ${dayStart - 9 * 86400 + 15 * 3600}, 'New pricing page');`,

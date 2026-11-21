@@ -11,7 +11,8 @@
     "./constants": "./src/constants.ts",
     "./types": "./src/types.ts",
     "./dashboard": "./src/dashboard.ts",
-    "./money": "./src/money.ts"
+    "./money": "./src/money.ts",
+    "./privacy": "./src/privacy.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -28,8 +28,22 @@ const webAppDir = path.resolve(
 	process.env.GROSSLYTICS_WEB_DIR ?? fileURLToPath(new URL('../../../apps/web', import.meta.url)),
 );
 
+const vidneatWritingRules =
+	process.env.SEO_WRITING_PROFILE === 'vidneat'
+		? `Answer the search in the first two or three sentences. Write like you are explaining it to a friend. Do not use em dashes, "delve", "in today's fast-paced world", "unlock", "game-changer", "it's important to note", "in conclusion", or "seamless". Make the article as long as needed to compete with top pages; never pad. Aim for 2 to 4 internal links to pages listed in site/site.md, only where they help. If fewer are relevant, do not force links. This is an editorial preference, not a Google ranking requirement.`
+		: '';
+
 const editorialVoice =
-	'Open every article by directly answering the reader’s question in a personal first-person voice. Lead with the author’s relevant, verifiable experience or observation and explain what it means for the reader; use I or we naturally throughout to share specific reasoning, tradeoffs and practical guidance. Use I only for the named author and we only for the people actually involved. Say “I read” or “I tested” only when that author actually did so and the claim can be supported; distinguish documentation from hands-on use. If first-hand experience is unavailable, open with an honest editorial assessment grounded in the available evidence and do not imply a test or experience took place. Avoid forced anecdotes, repetitive pronouns, generic filler and internal audit language. Do not imply AI-generated work is human experience.';
+	'In the first paragraph, answer the reader’s question in a natural personal voice and connect the answer to the named author’s relevant, verifiable experience, observation, research or test. Use I for the named author and we only for the people actually involved. Explain what the author read, tested, measured or observed and what it means for the reader. Use first person naturally throughout when it adds useful reasoning, tradeoffs or practical advice. Say “I read” or “I tested” only when evidence establishes that the named author actually did so; distinguish documentary research from hands-on testing. If no relevant experience or research can be attributed to the author, do not invent or imply it: give an honest evidence-based answer and identify the evidence gap for editorial follow-up. Avoid forced anecdotes, repetitive pronouns, generic filler and internal audit language. Do not imply AI-generated work is human experience.';
+
+const editorialSuggestions = [
+	editorialVoice,
+	'Use original evidence from building or using the product when it helps answer the question. For performance claims, report actual measurements, such as wall-clock time and output size, alongside the input, workload, hardware, app versions, settings and tradeoffs. Use comparable inputs and disclose differences between workflows. If evidence is missing, narrow the claim or flag the test needed in the editorial review.',
+	'Include short, real terminal or FFmpeg output, HLS/M3U8 manifest excerpts or observed errors where they explain the workflow. Show the command or conditions and explain what the excerpt demonstrates. Redact secrets and private data, and label illustrative examples as such. For a stream-copy quality claim, verify which streams were copied without re-encoding. File size and Finder metadata alone cannot establish that.',
+	'Use sharp, annotated screenshots of the actual app, relevant system tools or output metadata where they clarify the workflow or support a specific observation. Preserve the visible context and describe what the capture actually shows.',
+	'Lead with the technical problem and its immediate solution. Cut broad scene-setting and boilerplate transitions. Replace vague buzzwords with specific actions or facts. Mix short statements with longer technical explanations, use active developer language, and revise repeated sentence formulas such as “not only … but also”. Treat style cues as editorial judgments and preserve precise technical terms.',
+	...(vidneatWritingRules ? [vidneatWritingRules] : []),
+];
 
 const server = new McpServer(
 	{
@@ -37,8 +51,7 @@ const server = new McpServer(
 		version: '2.2.0',
 	},
 	{
-		instructions:
-			`Read get_google_seo_guidance and call plan_internal_links before drafting. Google guidance takes priority over editorial heuristics: no link/word/image quotas, fabricated testing, self-serving rankings, keyword stuffing or ranking guarantees. ${editorialVoice} Fact-check claims and disclose publisher interests. Ensure an incoming link from a useful page or collection index. Before creating an article, call plan_article_visuals. Where UI evidence helps, use the connected browser to inspect and capture real public home/demo/pricing/docs pages, then register_article_screenshot and embed its figureMarkdown near the relevant claim. Do not fabricate dashboards or use images to imply human authorship. Explain unnecessary or unavailable screenshots in visualReview. Audit the final body and verify the built page. This server imports captures; it does not control a browser or bypass login/challenges.`,
+		instructions: `Read get_google_seo_guidance and call plan_internal_links before drafting. Google guidance takes priority over editorial heuristics: no link/word/image quotas, fabricated testing, self-serving rankings, keyword stuffing or ranking guarantees. ${editorialSuggestions.join(' ')} Fact-check claims and disclose publisher interests. Ensure an incoming link from a useful page or collection index. Before creating an article, call plan_article_visuals. Where screenshots help, inspect and capture real public web views or native app workflows, then register_article_screenshot and embed its figureMarkdown near the relevant claim. Do not fabricate screenshots or use them to imply human authorship. Explain unnecessary or unavailable screenshots in visualReview. Audit the final body and verify the built page. This server imports captures; the caller handles capture.`,
 	},
 );
 
@@ -171,10 +184,21 @@ server.registerTool(
 	'get_google_seo_guidance',
 	{
 		description:
-			'Read dated, source-linked Google Search guidance for article creation and publishing, including internal links, evidence, spam avoidance and limitations. Not Google certification.',
+			'Read dated, source-linked Google Search guidance and house editorial suggestions for article creation and publishing. Not Google certification.',
 		inputSchema: {},
 	},
-	async () => ({ content: [{ type: 'text', text: JSON.stringify(seoGuidance, null, 2) }] }),
+	async () => ({
+		content: [
+			{
+				type: 'text',
+				text: JSON.stringify(
+					{ ...seoGuidance, editorialSuggestionsNotGoogleRequirements: editorialSuggestions },
+					null,
+					2,
+				),
+			},
+		],
+	}),
 );
 server.registerTool(
 	'plan_internal_links',
@@ -203,7 +227,7 @@ server.registerTool(
 	'plan_article_visuals',
 	{
 		description:
-			'Assess whether real screenshots help this article and plan connected-browser captures. Call before drafting or publishing. Select public product home/demo/pricing/docs views that explain a section; skip decorative filler with a stated reason. Does not itself operate a browser.',
+			'Assess whether real screenshots help this article and plan public browser or native app captures. Call before drafting or publishing. Choose views that explain a section; skip decorative filler with a stated reason. Does not capture screenshots.',
 		inputSchema: {
 			keyword: z.string().min(1).max(300),
 			format: z.enum(['how-to', 'listicle', 'comparison', 'explainer', 'case-study']).optional(),
@@ -228,7 +252,7 @@ server.registerTool(
 	'register_article_screenshot',
 	{
 		description:
-			'Import a genuine PNG/JPEG screenshot already captured and visually inspected with the connected browser. Records source/date/hash, reuses identical captures and returns a captioned, accessible, lazy-loaded HTML figure. Never use generated or reconstructed product screens; label demo/sample data truthfully. This tool imports files, not browser captures.',
+			'Import a genuine, visually inspected browser or native app PNG/JPEG screenshot. Records source/date/hash, reuses identical captures and returns a captioned, accessible, lazy-loaded HTML figure. Use pageType native-app with a public product or docs reference URL for desktop captures. Never use generated or reconstructed screens; label demo/sample data truthfully.',
 		inputSchema: screenshotSchema,
 	},
 	async (input) => ({
@@ -286,9 +310,8 @@ server.registerTool(
 							googleSearchGuidance: seoGuidance,
 							internalLinkPlan: await planInternalLinks(webAppDir, keyword),
 							editorialSuggestionsNotGoogleRequirements: [
-								editorialVoice,
-								'Answer the reader directly, with prerequisites and tradeoffs.',
-								'Choose headings, paragraph lengths, tables, lists and examples that help this reader; no fixed quotas.',
+								...editorialSuggestions,
+								'Include prerequisites and tradeoffs. Choose headings, tables, lists and examples that help this reader without fixed quotas.',
 								'Support consequential claims with accurate primary sources or reproducible evidence. Never invent hands-on tests.',
 								`Rank alternatives by stated criteria and disclose ${site.name} ownership; do not automatically put ${site.name} first.`,
 								'Use contextual internal links and ensure the article has a crawlable incoming link.',
@@ -311,7 +334,7 @@ server.registerTool(
 	'outrank_3pass_audit',
 	{
 		description:
-			'Audits Markdown structure, style, links and visual evidence using Outrank-inspired checks. Validates local screenshot files, provenance, source/date captions, alt text, dimensions and lazy loading. Supply visualReview to explain screenshot selection or omission; file checks do not prove authenticity or verify factual claims.',
+			'Audits Markdown structure, style, links and visual evidence using Outrank-inspired checks. Offers copy edits and first-hand evidence prompts for manual review. Validates local screenshot files, provenance, source/date captions, alt text, dimensions and lazy loading. Supply visualReview to explain screenshot selection or omission; file checks do not prove authenticity or verify factual claims.',
 		inputSchema: {
 			primaryKeyword: z.string(),
 			slug: z.string(),
@@ -326,8 +349,8 @@ server.registerTool(
 		const lineErrors: string[] = [];
 		const proofErrors: string[] = [];
 
-		const paragraphs = markdownBody
-			.replace(/```[\s\S]*?```/g, '') // ignore code blocks
+		const prose = markdownBody.replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, '');
+		const paragraphs = prose
 			.split(/\n\s*\n/)
 			.map((p) => p.trim())
 			.filter(
@@ -344,10 +367,10 @@ server.registerTool(
 
 		const firstParagraph = paragraphs[0] || '';
 		const throatClearingRegex =
-			/^(in this article|in today's|welcome to|have you ever wondered|when it comes to|as a founder, you know|let's dive in|in this guide)/i;
+			/^(in this article|in today['’]s|welcome to|have you ever wondered|when it comes to|as a founder, you know|let['’]s dive in|in this guide)\b/i;
 		if (throatClearingRegex.test(firstParagraph)) {
 			structureErrors.push(
-				`Optional clarity review: the first paragraph starts with introductory wording ("${firstParagraph.slice(0, 50)}..."). Consider leading with the answer where useful.`,
+				`Optional clarity review: replace the generic opening ("${firstParagraph.slice(0, 50)}...") with the technical problem and its immediate solution.`,
 			);
 		}
 
@@ -356,21 +379,15 @@ server.registerTool(
 			/\?|^(what|how|why|which|when|where|who|can|should|is|does)\b/i.test(h.trim()),
 		).length;
 
-		// --- PASS 2: LINE PASS (Paragraph length <= 3 sentences, no filler/AI words) ---
-		const longParagraphs = paragraphs.filter((p) => {
-			const sentences = p.split(/(?<=[.!?])\s+/).filter(Boolean);
-			return sentences.length > 3;
-		});
-		if (longParagraphs.length > 0) {
-			lineErrors.push(
-				`Optional readability review: ${longParagraphs.length} paragraph(s) exceed three sentences. Example: "${longParagraphs[0]?.slice(0, 90)}..."`,
-			);
-		}
-
-		const bannedFluffAndFiller = [
+		const fillerPhrases = [
 			'delve',
 			'tapestry',
 			'testament',
+			'crucial',
+			'seamless',
+			'digital landscape',
+			'evolving landscape',
+			'elevate',
 			'in order to',
 			'moreover',
 			'furthermore',
@@ -380,15 +397,20 @@ server.registerTool(
 			'it is important to note',
 			'at the end of the day',
 			'needless to say',
-			'TK',
 		];
-		const lowerBody = markdownBody.toLowerCase();
-		const foundFluff = bannedFluffAndFiller.filter((w) =>
-			w === 'TK' ? markdownBody.includes('TK') : lowerBody.includes(w),
+		const copy = prose.replace(/(`+)[^\n]*?\1/g, '').replace(/\]\([^\s)]+/g, ']');
+		const foundFluff = fillerPhrases.filter((phrase) =>
+			new RegExp(`\\b${phrase}\\b`, 'i').test(copy),
 		);
+		if (/\bTK\b/.test(copy)) foundFluff.push('TK');
 		if (foundFluff.length > 0) {
 			lineErrors.push(
 				`Optional copy review: check wording or placeholders: [${foundFluff.join(', ')}]`,
+			);
+		}
+		if (/\bnot only\b[^.!?\n]*(?:\bbut also\b|,[^.!?\n]*\balso\b)/i.test(copy)) {
+			lineErrors.push(
+				'Optional rhythm review: consider rewriting “not only … also” as a direct statement. Vary sentence lengths to fit the explanation.',
 			);
 		}
 
@@ -422,7 +444,12 @@ server.registerTool(
 							passedAllOutrankChecks: passedAllPasses,
 							limitations: seoGuidance.limitations,
 							linkReview,
-							editorialSuggestions: [editorialVoice, ...structureErrors, ...lineErrors, ...linkReview.suggestions],
+							editorialSuggestions: [
+								...editorialSuggestions,
+								...structureErrors,
+								...lineErrors,
+								...linkReview.suggestions,
+							],
 							primaryKeyword,
 							title,
 							description,
@@ -455,7 +482,7 @@ server.registerTool(
 	'publish_outrank_astro_post',
 	{
 		description:
-			'Writes a NEW local Astro Markdown article, raw Markdown copy and llms.txt entry. Call plan_article_visuals first; capture helpful real public screenshots with the connected browser and register/embed them, or explain their omission in visualReview. Validates referenced screenshots before writing. Does not deploy, overwrite pages or verify factual claims. Markdown/HTML only, not MDX components. On a content-collection site (SEO_CONTENT_COLLECTIONS) it writes one .mdx guide in that collection instead, ignores `collection`, and requires category and author.',
+			'Writes a NEW local Astro Markdown article, raw Markdown copy and llms.txt entry. Call plan_article_visuals first; register and embed helpful public browser or native app captures, or explain their omission in visualReview. Validates referenced screenshots before writing. Does not deploy, overwrite pages or verify factual claims. Markdown/HTML only, not MDX components. On a content-collection site (SEO_CONTENT_COLLECTIONS) it writes one .mdx guide in that collection instead, ignores `collection`, and requires category and author.',
 		inputSchema: {
 			slug: z
 				.string()
@@ -469,7 +496,12 @@ server.registerTool(
 			description: z.string().min(1).max(500),
 			primaryKeyword: z.string().min(1),
 			visualReview: visualReviewSchema,
-			answerFirstIntro: z.string().min(1).describe('Answer the reader directly in a personal first-person voice, using verified experience or an honest evidence-based assessment; never invent first-hand testing.'),
+			answerFirstIntro: z
+				.string()
+				.min(1)
+				.describe(
+					'Answer the reader directly in a personal first-person voice, using verified experience or an honest evidence-based assessment; never invent first-hand testing.',
+				),
 			keyTakeaways: z.array(z.string()).max(6).default([]),
 			mdxBodySections: z.string().min(1).describe('Markdown only; executable MDX is not supported'),
 			faqs: z

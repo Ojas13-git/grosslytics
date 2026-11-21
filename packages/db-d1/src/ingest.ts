@@ -51,11 +51,11 @@ export async function ingestEvents(
 		 city = CASE WHEN excluded.last_seen_at >= last_seen_at THEN excluded.city ELSE city END,
 		 last_seen_at = MAX(last_seen_at, excluded.last_seen_at), total_sessions = total_sessions + 1,
 		 total_active_read_sec = total_active_read_sec + excluded.total_active_read_sec, max_scroll_pct = MAX(max_scroll_pct, excluded.max_scroll_pct)`,
-		`${incoming} UPDATE visitors AS v SET customer_email_hash = p.customer_email_hash FROM payments p
+		`${incoming} UPDATE visitors AS v SET customer_email_hash = p.customer_email_hash FROM payment_records p
 		 WHERE p.site_id = v.site_id AND p.visitor_id = v.visitor_id AND v.customer_email_hash IS NULL AND p.customer_email_hash IS NOT NULL
 		 AND EXISTS (SELECT 1 FROM incoming WHERE e->>'$.sid' = v.site_id AND e->>'$.vid' = v.visitor_id)`,
 		// A payment may beat the queued visit. Fill only missing attribution, using touches before payment.
-		`${incoming} UPDATE payments AS p SET
+		`${incoming} UPDATE payment_records AS p SET
 		 first_touch_source = v.first_source, last_touch_source = v.last_source,
 		 time_to_convert_hours = ROUND(MAX(0, p.created_at - v.first_seen_at) / 3600.0, 1),
 		 buyer_read_sec = v.total_active_read_sec, buyer_scroll_pct = v.max_scroll_pct,

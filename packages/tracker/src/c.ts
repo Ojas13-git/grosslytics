@@ -1,3 +1,5 @@
+import { analyticsPath } from '@grosslytics/shared/privacy';
+
 // Opt-in click map for pricing and checkout pages. Add it after g.js on the pages you want mapped:
 // <script defer src="https://YOUR-HOST/c.js" data-site-id="gl_…"></script>
 // Records what was clicked (a label, never typed text), clicks on things that do nothing ("dead"), and 3 fast clicks ("rage").
@@ -43,7 +45,8 @@ if (sid && !w.__glc && !navigator.webdriver) {
 			method: 'POST',
 			keepalive: true,
 			mode: 'no-cors',
-			body: JSON.stringify({ sid, vid, ses: get(() => sessionStorage, 'gl_ses') || vid, t: 'click', n: location.pathname, src, ref: '', sd: 0, dur: 0, meta }),
+			referrerPolicy: 'strict-origin',
+			body: JSON.stringify({ sid, vid, ses: get(() => sessionStorage, 'gl_ses') || vid, t: 'click', n: analyticsPath(location.pathname), src, ref: '', sd: 0, dur: 0, meta }),
 		}).catch(() => {});
 	}, { capture: true, passive: true });
 }

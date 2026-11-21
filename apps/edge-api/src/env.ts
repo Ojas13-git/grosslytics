@@ -1,6 +1,6 @@
 import type { EnrichedEvent } from '@grosslytics/shared/types';
 
-type RateLimiter = { limit(o: { key: string }): Promise<{ success: boolean }> };
+export type RateLimiter = { limit(o: { key: string }): Promise<{ success: boolean }> };
 
 export interface Bindings {
 	DB: D1Database;
@@ -23,11 +23,11 @@ export interface Bindings {
 	STRIPE_BILLING_WEBHOOK_SECRET?: string;
 	/** Signing secret (whsec_…) of the Dodo Payments webhook for Grosslytics' own Lifetime and Cloud sales */
 	DODO_BILLING_WEBHOOK_SECRET?: string;
-	/** Optional: only Dodo payments that include this product (pdt_…) mint a license */
+	/** Required for Dodo Lifetime sales: the approved product (pdt_…) */
 	LIFETIME_PRODUCT_ID?: string;
 	/** Lifetime licenses (operator only): HMAC key that derives each license key from its checkout session (Stripe) or payment (Dodo) */
 	LICENSE_SECRET?: string;
-	/** Optional: only checkouts from this Payment Link (plink_…) mint a license */
+	/** Required for Stripe Lifetime sales: the approved Payment Link (plink_…) */
 	LIFETIME_PAYMENT_LINK_ID?: string;
 	/** R2 bucket holding the installer's release bundle, `latest.tgz` (scripts/release.ts) */
 	RELEASES?: R2Bucket;
@@ -35,5 +35,15 @@ export interface Bindings {
 	WAITLIST_LIMITER?: RateLimiter;
 	/** Workers Rate Limiting binding for Hosted Cloud /api/auth/signup */
 	SIGNUP_LIMITER?: RateLimiter;
+	LOGIN_LIMITER?: RateLimiter;
+	INGEST_SOURCE_LIMITER?: RateLimiter;
+	INGEST_SITE_LIMITER?: RateLimiter;
+	LICENSE_LIMITER?: RateLimiter;
+	SITE_SECRETS_KEY?: string;
+	WEBHOOK_SITE_ID?: string;
+	PLUNK_API_KEY?: string;
+	PLUNK_FROM_EMAIL?: string;
+	CLOUD_STRIPE_PAYMENT_LINK_ID?: string;
+	CLOUD_DODO_PRODUCT_ID?: string;
 }
 

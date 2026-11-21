@@ -1,4 +1,5 @@
 import type { PaymentGateway } from '@grosslytics/shared/types';
+import { PAYMENT_GATEWAYS } from '@grosslytics/shared/constants';
 
 const enc = new TextEncoder();
 const TOLERANCE_SEC = 300; // replay window for timestamped signatures
@@ -37,6 +38,7 @@ export async function verifyWebhook(
 	headers: Headers,
 	now = Math.floor(Date.now() / 1000),
 ): Promise<boolean> {
+	if (typeof secret !== 'string' || !secret || !PAYMENT_GATEWAYS.includes(gateway)) return false;
 	const key = enc.encode(secret);
 	const fresh = (ts: number) => Number.isFinite(ts) && Math.abs(now - ts) <= TOLERANCE_SEC;
 
@@ -68,13 +70,14 @@ export async function verifyWebhook(
 	if (gateway === 'revenuecat') {
 		// RevenueCat sends the Authorization header value you set on the webhook
 		const auth = (headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-		return safeEqual(auth, secret.replace(/^Bearer\s+/i, ''));
+		return !!auth && safeEqual(auth, secret.replace(/^Bearer\s+/i, ''));
 	}
 
 	if (gateway === 'paypal') return verifyPaypal(secret, body, headers);
 
 	if (gateway === 'gumroad') return false; // checked by URL key in the route
 
+	if (gateway !== 'razorpay' && gateway !== 'lemonsqueezy') return false;
 	// Razorpay & LemonSqueezy: hex HMAC-SHA256 of the raw body
 	const sig = headers.get(gateway === 'razorpay' ? 'x-razorpay-signature' : 'x-signature') || '';
 	return safeEqual(sig, hex(await hmac(key, body)));

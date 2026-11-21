@@ -1,17 +1,17 @@
 # How to Self-Host Revenue Analytics on Cloudflare D1
 
-> Canonical URL: https://grosslytics.com/blog/cloudflare-d1-web-analytics/ | Updated: 2026-11-10
+> Canonical URL: https://grosslytics.com/blog/cloudflare-d1-web-analytics/ | Updated: 2026-11-21
 
 I recommend starting a self-hosted Grosslytics deployment by checking the whole Cloudflare stack, not just Worker requests. You can use the source-build setup or the licensed installer when a downloadable release is available; Workers, D1, Queues and Durable Objects all have allowances that affect the cost. I'll walk you through sizing, deployment and checking that visits and payments connect.
 
 ## Key takeaways
 
-- A free-tier infrastructure bill is conditional on all service limits; it excludes domain, optional license and operating costs.
+- A free-tier infrastructure bill depends on all service limits, including the 500 MB limit for the deployment’s D1 database.
 - The source route uses bun run setup; the packaged route uses npx grosslytics@latest install with a valid license and available release.
 - Queues can become the first limit: 10,000 free operations/day allow about 3,333 normal small messages before retries and other usage.
 - Validate browser events, queue persistence and signed test payments separately.
 
-Cloudflare’s allowances below were checked on November 8, 2026. Check the current limits against your own workload before deploying.
+Cloudflare’s allowances below were checked on November 21, 2026. Compare the limits with your own workload before deploying.
 
 ## Step 1: Check whether your workload fits the free plan
 
@@ -20,13 +20,13 @@ A $0 Cloudflare infrastructure bill is possible only while the entire deployment
 | Component | Free allowance relevant to this setup | What to measure |
 | --- | --- | --- |
 | Workers | 100,000 requests/day; 10 ms CPU time per invocation | API requests, dashboard execution and CPU usage across the account |
-| D1 | 5 million rows read/day, 100,000 rows written/day, 5 GB total storage | Query scans, writes including indexes, and stored data |
+| D1 | 5 million rows read/day and 100,000 rows written/day. Storage caps are 500 MB per database and 5 GB per account | Query scans, writes including indexes, and the size of `grosslytics-db` |
 | Queues | 10,000 standard operations/day | Each message’s write, read and delete operations, plus retries |
 | Durable Objects | 100,000 requests/day and 13,000 GB-s/day of duration; separate storage allowances | Presence updates, WebSockets, alarms, duration and storage |
 
 These are distinct meters, not interchangeable event allowances. Other applications on your account consume the same account-level budgets. Check the current [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [Queues pricing](https://developers.cloudflare.com/queues/platform/pricing/) and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) before deployment.
 
-D1 counts rows scanned, not just rows returned. Indexes can reduce reads but add writes. On the Free plan, reaching a daily D1 read or write limit causes query errors until allowance resets; it does not mean unlimited ingestion. A domain, optional license and your operating time are separate from Cloudflare usage.
+D1 counts the rows a query scans. Indexes can reduce reads but add writes. A Free plan query also fails once you exhaust the relevant daily allowance. Grosslytics stores its events and payments in one database, so use the [500 MB per-database limit](https://developers.cloudflare.com/d1/platform/limits/) when planning capacity for that installation. A domain, optional license and your operating time are separate costs.
 
 <figure>
   <a href="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" aria-label="Open full-size Cloudflare D1 screenshot">
@@ -51,14 +51,14 @@ This calculation excludes retries, dead-letter writes, larger messages and other
 
 ## Step 2: Prepare your account, hostname and install path
 
-Use a Cloudflare account that owns your domain, an unused hostname such as `analytics.example.com`, and a current supported Node.js release. The CLI declares Node.js 18 as its minimum; the source build also needs Git and Bun. The current installer uses macOS/Linux commands; check compatibility before installing on Windows.
+Use a Cloudflare account that owns your domain, an unused hostname such as `analytics.example.com`, and a current supported Node.js release. The CLI requires Node.js 22.12 or newer. Source builds require Node.js 22.23.4 or newer, Git and Bun. The current installer uses macOS/Linux commands; check compatibility before installing on Windows.
 
 For a new Cloudflare account, open Workers & Pages once to initialize its workers.dev subdomain. Use a hostname with no existing A, AAAA or CNAME record; the custom-domain setup needs to attach that hostname. Choose the correct account when prompted.
 
 Select one route:
 
-- **Source build:** requires access to the Grosslytics repository and its build dependencies. The repository labels this the free self-host route.
-- **Packaged installer:** requires an available downloadable release and a valid Grosslytics Lifetime license. The repository lists that license at $29 once; confirm current availability and terms on the [self-hosting page](/start?plan=lifetime).
+- **Source build:** uses the Grosslytics repository and its build dependencies. The free setup requires a “Powered by Grosslytics” link on the tracked site’s homepage to unlock the dashboard. The [self-hosting docs](/docs/#self-host) show the link and verification step.
+- **Packaged installer:** requires a downloadable release and a valid Grosslytics Lifetime license. Check availability and terms on the [self-hosting page](/start/?plan=lifetime).
 
 The current public docs still label the packaged path as opening soon. Do not assume a purchase, npm package or source repository is accessible until you have checked. If access is unavailable, resolve that prerequisite before attempting deployment; there is no alternative download included here.
 
@@ -105,7 +105,15 @@ Replace both placeholders with your real analytics hostname and site ID. Install
 
 Use the browser’s Network panel to check that `g.js` loads and that `/api/event` receives a successful response. If your site uses Content Security Policy, add the analytics origin to the relevant `script-src` and `connect-src` directives while preserving the rest of your policy. Follow the [tracker installation instructions](/docs/#install).
 
-An accepted event response confirms collection, not persistence through the queue. Confirm that the visit later appears in the dashboard and inspect queue failures if it does not.
+A `202 Accepted` means the collector responded. Some filtered events also get a `202`, and enqueueing runs asynchronously. Check the stored Sources report for `setup-check` before treating the visit as recorded.
+
+| What you see | What to check |
+| --- | --- |
+| `g.js` fails to load or there is no `/api/event` request | Confirm the script URL, site ID and browser console errors, including CSP. |
+| `/api/event` returns `403` or `404` | Confirm the tracked origin and site ID, then verify that `/api/*` reaches the API Worker. |
+| `/api/event` returns `202`, but the tagged visit is missing | Check the API Worker’s logs for failed queue sends. If the message arrived, inspect the ingest queue’s backlog and retries, the dead-letter queue and D1 write errors. |
+
+In local repository tests on November 21, 2026, eligible visits reached the queue stub, and filtered bot requests returned `202` without queuing an event. A separate ingestion test replayed a 100-message batch without duplicating stored events and retried an injected write failure. These tests used local fixtures. Use the Cloudflare dashboard and your own tagged visit to verify your deployed pipeline.
 
 ## Step 5: Connect a payment provider and verify the complete journey
 

@@ -2,6 +2,13 @@ import type { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
 import type { Bindings } from './env.js';
 import { isCloud, ownsSite, requestSite, sessionAccount } from './cloud.js';
+import { redeemLiveTicket, type LiveGrant } from './live-auth.js';
+
+declare module 'hono' {
+	interface ContextVariableMap {
+		liveGrant: LiveGrant;
+	}
+}
 
 export const TOKEN_PREFIX = 'gl_pat_';
 export const SESSION_COOKIE = 'gl_session';
@@ -37,7 +44,7 @@ export async function hasSession(c: Context<{ Bindings: Bindings }>): Promise<bo
 
 /**
  * Guard for /api/stats and /api/mcp; fails closed when API_TOKEN is unset. Accepts, in order:
- * - API_TOKEN (bearer or `?token=` for WebSocket upgrades): the owner's master key.
+ * - API_TOKEN (bearer): the owner's master key.
  * - a `gl_pat_` token: read-only, one site. GET requests whose `siteId` is that site, and MCP calls whose `site` is that site.
  * - the owner's session cookie from the /app password login: full access, same as API_TOKEN.
  * - on Hosted Cloud, a customer's session cookie: only that account's sites (`/api/stats/sites` scopes itself).
@@ -48,20 +55,36 @@ export async function requireToken(
 	next: Next,
 ): Promise<Response | void> {
 	const expected = c.env.API_TOKEN;
-	const given = c.req.header('authorization')?.replace(/^Bearer\s+/i, '') || c.req.query('token') || '';
+	const given = c.req.header('authorization')?.match(/^Bearer\s+(\S+)$/i)?.[1] ?? '';
 	if (!expected) return c.text('API_TOKEN not configured', 503); // fail closed
-	if (given && (await isMaster(given, expected))) return next();
+	const siteId = c.req.query('siteId');
+	if (c.req.path === '/api/stats/live') {
+		if (!siteId || c.req.header('upgrade')?.toLowerCase() !== 'websocket') return c.text('WebSocket upgrade required', 400);
+		const grant = await redeemLiveTicket(c.env, c.req.raw, siteId);
+		if (!grant) return c.text('Unauthorized', 401);
+		c.set('liveGrant', grant);
+		return next();
+	}
+	const issueTicket = c.req.path === '/api/stats/live-ticket' && c.req.method === 'GET' && !!siteId;
+	if (given && (await isMaster(given, expected))) {
+		if (issueTicket) c.set('liveGrant', { kind: 'master', hash: await hashToken(given), siteId });
+		return next();
+	}
 
 	if (!given.startsWith(TOKEN_PREFIX)) {
 		// CSRF: requiring a JSON content type forces a CORS preflight, and preflights never allow credentials, so other sites can't write with the cookie
-		const csrfOk = c.req.method === 'GET' || !!c.req.header('content-type')?.startsWith('application/json');
-		if (!isCloud(c.env) && (await hasSession(c))) return csrfOk ? next() : c.text('Unauthorized', 401);
+		const csrfOk = c.req.method === 'GET' || /^application\/json(?:\s*;|$)/i.test(c.req.header('content-type') ?? '');
+		if (!isCloud(c.env) && (await hasSession(c))) {
+			if (issueTicket) c.set('liveGrant', { kind: 'owner', hash: await hashToken(getCookie(c, SESSION_COOKIE)!), siteId });
+			return csrfOk ? next() : c.text('Unauthorized', 401);
+		}
 		const account = isCloud(c.env) ? await sessionAccount(c) : null;
 		if (!account || !csrfOk) return c.text('Unauthorized', 401);
 		if (c.req.path === '/api/stats/waitlist') return c.text('Owner only', 403);
 		if (c.req.path === '/api/stats/sites') return next();
 		const site = await requestSite(c);
 		if (!site || !(await ownsSite(c.env.DB, account.id, site))) return c.text('Not your site', 403);
+		if (issueTicket) c.set('liveGrant', { kind: 'account', hash: await hashToken(getCookie(c, SESSION_COOKIE)!), siteId });
 		return next();
 	}
 
@@ -75,6 +98,7 @@ export async function requireToken(
 	// The waitlist and the site list belong to the whole install, not to the token's site
 	const readOnly = isMcp || (c.req.method === 'GET' && !/^\/api\/stats\/(tokens|waitlist|sites)(\/|$)/.test(path));
 	if (!readOnly || (await requestSite(c)) !== row.site_id) return c.text('This token can only read its own site', 403);
+	if (issueTicket) c.set('liveGrant', { kind: 'pat', hash: await hashToken(given), siteId });
 
 	const now = Math.floor(Date.now() / 1000);
 	// At most one write a minute per token

@@ -18,11 +18,11 @@
     "migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "drizzle-orm": "^0.38.0",
+    "drizzle-orm": "^0.45.4",
     "@grosslytics/shared": "workspace:*"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.30.0",
+    "drizzle-kit": "^0.31.11",
     "typescript": "^5.7.0",
     "@cloudflare/workers-types": "^4.20241205.0"
   }

@@ -73,9 +73,13 @@ test('stdio tools research, audit and write articles without overwriting work', 
 		);
 		const tools = await client.listTools();
 		assert.equal(tools.tools.length, 7);
+		assert.match(client.getInstructions(), /wall-clock time and output size/);
 		const call = (name, args) => client.callTool({ name, arguments: args });
 		const guidance = JSON.parse((await call('get_google_seo_guidance', {})).content[0].text);
 		assert.ok(guidance.principles.some((p) => p.includes('no ideal link count')));
+		assert.ok(
+			guidance.editorialSuggestionsNotGoogleRequirements.some((p) => p.includes('HLS/M3U8')),
+		);
 		const plan = JSON.parse(
 			(
 				await call('plan_article_visuals', {
@@ -115,6 +119,9 @@ test('stdio tools research, audit and write articles without overwriting work', 
 		assert.equal(research.searchResults[0].url, 'https://example.com/guide');
 		assert.match(research.questionSource, /not Google People Also Ask/);
 		assert.ok(research.visualEvidencePlan.workflow.length);
+		assert.ok(
+			research.editorialSuggestionsNotGoogleRequirements.some((p) => p.includes('output size')),
+		);
 		const screenshotFile = path.join(root, 'browser-capture.png');
 		await writeFile(screenshotFile, fixturePng());
 		const screenshotInput = {
@@ -130,6 +137,7 @@ test('stdio tools research, audit and write articles without overwriting work', 
 		assert.equal(registeredResult.isError, undefined, JSON.stringify(registeredResult));
 		const registered = JSON.parse(registeredResult.content[0].text);
 		assert.equal(registered.provenance.width, 320);
+		assert.equal(registered.provenance.captureMethod, 'browser-screenshot');
 		assert.match(registered.figureMarkdown, /Example &quot;app&quot;/);
 		assert.match(registered.figureMarkdown, /loading="lazy"/);
 		assert.equal((await call('register_article_screenshot', screenshotInput)).isError, undefined);
@@ -184,6 +192,22 @@ test('stdio tools research, audit and write articles without overwriting work', 
 				.passedAutomatedChecks,
 			true,
 		);
+		const copyAudit = await auditText(
+			'In today’s fast-paced digital landscape, video is crucial.\n\nNot only does it trim, it also provides a seamless export in landscape orientation.\n\nUse `tapestry` as a sample filename.\n\n```text\ndelve into TK\n```\n\n~~~text\ngame-changer\n~~~',
+		);
+		assert.equal(copyAudit.passedAutomatedChecks, true);
+		assert.ok(
+			copyAudit.editorialSuggestions.some((p) => p.includes('replace the generic opening')),
+		);
+		assert.ok(copyAudit.editorialSuggestions.some((p) => p.includes('Optional rhythm review')));
+		assert.equal(
+			copyAudit.editorialSuggestions.find((p) => p.startsWith('Optional copy review')),
+			'Optional copy review: check wording or placeholders: [crucial, seamless, digital landscape]',
+		);
+		const technicalCopy = await auditText(
+			'Use landscape orientation. Then select a file. Check its duration. Export the segment.',
+		);
+		assert.ok(technicalCopy.editorialSuggestions.every((p) => !p.startsWith('Optional')));
 		const htmlLinks = await auditText(
 			'<a href="/docs/">Documentation</a> ![Asset](/not-a-link.png)',
 		);
@@ -375,6 +399,7 @@ test('content-collection sites get guides in their own format and domain', async
 		await mkdir(path.join(root, 'src/content/authors'), { recursive: true });
 		await mkdir(path.join(root, 'src/pages/guides'), { recursive: true });
 		await writeFile(path.join(root, 'src/pages/guides/[...slug].astro'), '');
+		await writeFile(path.join(root, 'src/pages/docs.astro'), '<p>Example product reference</p>');
 		await writeFile(path.join(root, 'src/content/authors/jane-doe.json'), '{}');
 		await writeFile(
 			path.join(guides, 'trim-video-mac.mdx'),
@@ -442,6 +467,41 @@ test('content-collection sites get guides in their own format and domain', async
 		await assert.rejects(readFile(path.join(root, 'public/_headers')), { code: 'ENOENT' });
 		await refused({});
 		assert.equal(await readFile(path.join(guides, 'cut-audio-mac.mdx'), 'utf8'), page);
+
+		const visualPlan = JSON.parse(
+			(await call('plan_article_visuals', { keyword: 'stream-copy on macOS' })).content[0].text,
+		);
+		assert.equal(visualPlan.recommendation, 'assess-real-screenshots');
+		assert.ok(visualPlan.workflow.some((step) => step.includes('Activity Monitor')));
+		const nativeFile = path.join(root, 'native-capture.png');
+		await writeFile(nativeFile, fixturePng());
+		const registered = await call('register_article_screenshot', {
+			product: 'Example',
+			screenshotFile: nativeFile,
+			sourceUrl: 'https://example.app/docs/',
+			capturedOn: '2026-01-01',
+			pageType: 'native-app',
+			alt: 'Example trim window with the export mode selected.',
+			caption: 'Example trim window showing the selected stream-copy mode.',
+		});
+		assert.equal(registered.isError, undefined, JSON.stringify(registered));
+		const screenshot = JSON.parse(registered.content[0].text);
+		const provenance = JSON.parse(
+			await readFile(path.join(root, 'public', `${screenshot.src.slice(1)}.json`), 'utf8'),
+		);
+		assert.equal(provenance.captureMethod, 'native-app-screenshot');
+		assert.match(screenshot.figureMarkdown, /Product reference: Example/);
+		const withNative = await call('publish_outrank_astro_post', {
+			...article,
+			slug: 'stream-copy-mac',
+			mdxBodySections: screenshot.figureMarkdown,
+			visualReview: {
+				decision: 'include-screenshots',
+				reason: 'The app window shows where the reader selects stream-copy mode.',
+			},
+		});
+		assert.equal(withNative.isError, undefined, JSON.stringify(withNative));
+		assert.equal(JSON.parse(withNative.content[0].text).visualEvidence.registeredScreenshots, 1);
 	} finally {
 		await client.close();
 		await rm(root, { recursive: true, force: true });

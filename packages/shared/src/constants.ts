@@ -32,3 +32,6 @@ export const PAYMENT_GATEWAYS = ['stripe', 'razorpay', 'polar', 'paddle', 'lemon
 
 /** Visitor presence TTL (milliseconds) */
 export const PRESENCE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Attribution link shown during free self-hosted setup. */
+export const FOOTER_SNIPPET = '<a href="https://grosslytics.com" rel="sponsored">Powered by Grosslytics</a>';

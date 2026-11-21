@@ -176,6 +176,7 @@ function OwnerDashboard({ variant }: { variant: 'full' | 'preview' }) {
 				connect(null);
 			}}
 			shared={!!current?.shared}
+			verifyDomain={current?.verifyDomain}
 			onShare={async (enabled) => {
 				await apiFetch(conn, `/api/stats/sites/${conn.siteId}/share`, { method: 'POST', body: JSON.stringify({ enabled }) });
 				setSites((list) => list.map((s) => (s.id === conn.siteId ? { ...s, shared: enabled ? 1 : 0 } : s)));
@@ -206,6 +207,7 @@ function Workspace(props: {
 	onDisconnect?: () => void;
 	payments?: string[];
 	shared?: boolean;
+	verifyDomain?: boolean;
 	onShare?: (enabled: boolean) => Promise<void>;
 	timezone?: string;
 	onTimezone?: (timezone: string) => Promise<void>;
@@ -458,6 +460,9 @@ function Workspace(props: {
 							Public revenue page at <a className="text-accent hover:underline" href={`/share/${site}`}>/share/{site}</a> (no customer emails or journeys)
 						</label>
 					)}
+					{props.verifyDomain && !props.shared && (
+						<p>Add a DNS TXT record at <code>_grosslytics.{site}</code> with the value <code>{conn.siteId}</code>, then enable the public page.</p>
+					)}
 					{props.onTimezone && props.timezone && (
 						<label className="flex items-center gap-2">
 							Days and hours in
@@ -535,7 +540,7 @@ function Workspace(props: {
 							<span className="tnum font-medium text-ink">{online}</span> online
 						</span>
 					)}
-					{source === 'share' && <span className="rounded-full bg-band px-2.5 py-1 text-[12px] text-ink-2">Verified from the payment provider</span>}
+					{source === 'share' && <span className="rounded-full bg-band px-2.5 py-1 text-[12px] text-ink-2">Shared by the site owner</span>}
 					{filters.map((x) => (
 						<button
 							key={x.dim}

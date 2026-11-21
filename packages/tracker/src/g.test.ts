@@ -28,6 +28,7 @@ function load(search = '', referrer = '', anchors: Array<{ href: string }> = [])
 		performance: { now: () => clock },
 		URL,
 		URLSearchParams,
+		crypto,
 		history: { pushState(_s: unknown, _t: string, url: string) { g.location.pathname = url; } },
 		addEventListener: (e: string, f: () => void) => (handlers[e] = f),
 	};
@@ -115,6 +116,22 @@ test('checkout links use gateway-specific parameters and preserve an existing re
 	expect(new URL(links[5]!.href).search).toBe('');
 	expect(new URL(links[6]!.href).searchParams.get('metadata_visitor_id')).toBe(visitorId);
 	expect(new URL(links[6]!.href).searchParams.get('quantity')).toBe('1');
+});
+
+test('tracking strips sensitive paths and referrers and decorates only checkout provider domains', () => {
+	const links = [
+		'https://stripe.attacker.com/checkout',
+		'https://polar-attacker.com/checkout',
+		'https://gumroad.com.attacker.com/checkout',
+		'http://buy.stripe.com/checkout',
+	].map((href) => ({ href }));
+	const original = links.map((link) => link.href);
+	const page = load('', 'https://acme.io/reset/abcdefghijklmnopqrstuvwxyz?email=private@example.com', links);
+	expect(page.sent[0].ref).toBe('acme.io');
+	page.g.history.pushState({}, '', '/reset-password/abcdefghijklmnopqrstuvwxyz');
+	expect(page.sent.at(-1).n).toBe('/reset-password/:redacted');
+	expect(links.map((link) => link.href)).toEqual(original);
+	expect(load('', 'javascript:alert(1)').sent[0].ref).toBe('');
 });
 
 test('goal syntax from DataFast, Umami and Plausible works unchanged', () => {

@@ -3,14 +3,12 @@ import { defineMiddleware } from 'astro:middleware';
 // Pages rendered on request skip the installer's _headers file, so self-hosted copies mark them noindex here
 export const onRequest = defineMiddleware(async (ctx, next) => {
 	const res = await next();
-	if (ctx.url.hostname === 'grosslytics.com') return res;
-	try {
-		res.headers.set('X-Robots-Tag', 'noindex, nofollow');
-		return res;
-	} catch {
-		// Redirects and passed-through responses have read-only headers
-		const copy = new Response(res.body, res);
-		copy.headers.set('X-Robots-Tag', 'noindex, nofollow');
-		return copy;
-	}
+	const response = new Response(res.body, res);
+	if (ctx.url.hostname !== 'grosslytics.com') response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+	response.headers.set('Strict-Transport-Security', 'max-age=31536000');
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('X-Frame-Options', 'DENY');
+	response.headers.set('Referrer-Policy', 'no-referrer');
+	response.headers.append('Content-Security-Policy', "frame-ancestors 'none'; object-src 'none'; base-uri 'self'");
+	return response;
 });

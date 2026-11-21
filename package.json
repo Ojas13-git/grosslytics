@@ -3,6 +3,9 @@
   "private": true,
   "license": "AGPL-3.0-only",
   "packageManager": "bun@1.4.2",
+  "engines": {
+    "node": ">=22.23.4"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -23,6 +26,9 @@
     "db:seed:local": "bun scripts/db.ts seed",
     "db:migrate:remote": "bun scripts/db.ts migrate-remote",
     "setup": "bun scripts/release.ts --keep-env && bun run --cwd packages/cli build && node packages/cli/dist/index.js install --bundle .release/grosslytics.tgz"
+  },
+  "overrides": {
+    "esbuild": "0.28.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

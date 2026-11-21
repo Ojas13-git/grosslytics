@@ -1,5 +1,6 @@
 ---
 import Page from '../layouts/Page.astro';
+import { FOOTER_SNIPPET } from '@grosslytics/shared/constants';
 
 // Every statement here is checked against the code: tracker (packages/tracker/src/g.ts), webhooks (apps/edge-api/src/routes/webhooks.ts),
 // API routes (apps/edge-api/src/routes/stats.ts) and MCP tools (apps/edge-api/src/mcp.ts). Update both together.
@@ -46,7 +47,7 @@ const endpoints = [
 	['POST', '/api/stats/sites/{siteId}/import/stripe', '{ key, kind?, after? } imports one page of past Stripe payments; call again with the returned next until it is null. The key is not stored.'],
 	['GET', '/api/stats/ai-crawls?siteId=…&range=30d', 'AI crawler requests by bot and by page'],
 	['GET', '/api/stats/clicks?siteId=…&range=30d', 'Clicks per page and element from the click map, with buyers, dead and rage clicks'],
-	['POST', '/api/crawl', '{ sid, path, ua } from your server: counts one AI crawler request (no token; see AI crawlers)'],
+	['POST', '/api/crawl', '{ sid, path, ua } from your server with Authorization: Bearer <crawler key>'],
 	['POST', '/api/stats/annotations', '{ siteId, at: unix seconds, label } adds a marker to the chart'],
 ];
 
@@ -143,7 +144,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
 				<h2 id="ai-crawlers" class={h2}>AI crawlers</h2>
-				<p>GPTBot, ClaudeBot, PerplexityBot and other AI crawlers fetch your pages without running JavaScript, so no tracking script can see them. To count them, your server tells Grosslytics when one asks for a page. Only requests from known AI crawlers are counted, and they never count as visitors. This is unauthenticated, like page views: someone who knows your site ID could add fake counts.</p>
+				<p>GPTBot, ClaudeBot, PerplexityBot and other AI crawlers fetch your pages without running JavaScript, so no tracking script can see them. To count them, your server tells Grosslytics when one asks for a page. Only requests from known AI crawlers are counted, and they never count as visitors. Generate a site-specific crawler key in Settings → API tokens, then keep it in your server environment. Every report must include it as an Authorization bearer token.</p>
 				<p><strong>Next.js</strong> (<code class={code}>middleware.ts</code>):</p>
 				<pre class={pre}><code>{`import { NextResponse, type NextRequest } from 'next/server';
 
@@ -154,7 +155,7 @@ export function middleware(req: NextRequest) {
   if (AI.test(ua)) {
     fetch('${ORIGIN}/api/crawl', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + process.env.GROSSLYTICS_CRAWL_KEY },
       body: JSON.stringify({ sid: 'YOUR_SITE_ID', path: req.nextUrl.pathname, ua }),
     }).catch(() => {});
   }
@@ -167,14 +168,15 @@ export function middleware(req: NextRequest) {
     if (/GPTBot|ClaudeBot|PerplexityBot|OAI-SearchBot|ChatGPT-User|Google-Extended/.test(ua)) {
       ctx.waitUntil(fetch('${ORIGIN}/api/crawl', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.GROSSLYTICS_CRAWL_KEY },
         body: JSON.stringify({ sid: 'YOUR_SITE_ID', path: new URL(req.url).pathname, ua }),
       }));
     }
     return fetch(req);
   },
 };`}</code></pre>
-				<p>Any other server works the same way: one POST of <code class={code}>{'{ sid, path, ua }'}</code> to <code class={code}>/api/crawl</code>. Visitors who arrive from ChatGPT, Perplexity, Claude, Gemini or Copilot answers are tracked separately, as the “AI Search” source, with their revenue.</p>
+				<p>Any other server works the same way: one POST of <code class={code}>{'{ sid, path, ua }'}</code> to <code class={code}>/api/crawl</code> with <code class={code}>Authorization: Bearer &lt;crawler key&gt;</code>. Visitors who arrive from ChatGPT, Perplexity, Claude, Gemini or Copilot answers are tracked separately, as the “AI Search” source, with their revenue.</p>
+				<p>To check the full path from an AI referral to a payment, follow the <a class="text-accent hover:underline" href="/blog/track-chatgpt-traffic-revenue/">ChatGPT revenue attribution guide</a>.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
@@ -217,13 +219,14 @@ export function middleware(req: NextRequest) {
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
 				<h2 id="self-host" class={h2}>Self-hosting</h2>
 				<p>Grosslytics runs entirely in your own Cloudflare account: Workers, D1, Queues and a Durable Object. The free Workers plan is enough for most sites.</p>
-				<p>The free setup asks for a link in return. Put <code>&lt;a href="https://grosslytics.com"&gt;Powered by Grosslytics&lt;/a&gt;</code> in the footer of each site you track, in the page’s HTML and without <code>rel="nofollow"</code>. The dashboard for a site opens once the link is found on its home page; visits and sales are recorded in the meantime. The link is checked once a day, and removing it locks the dashboard again. Lifetime installs skip this.</p>
-				<p>You need Bun, Node.js 18 or newer, and a domain on Cloudflare. From a copy of the code, one command sets everything up: it signs in to Cloudflare (you click Allow), creates the database and queues, deploys the API and dashboard to a hostname on your domain, and sets your dashboard password. Run it again to update.</p>
+				<p>The <a class="text-accent hover:underline" href="/blog/cloudflare-d1-web-analytics/">Cloudflare D1 deployment guide</a> covers free-plan limits and how to verify that browser events reach the database.</p>
+				<p>For free self-hosting, add <code>{FOOTER_SNIPPET}</code> to the homepage footer of each site you track. You can also use <code>rel="nofollow"</code>. The dashboard opens after verification, and visits and sales are recorded in the meantime. The link is checked daily. Removing it locks the dashboard again. Lifetime installs skip this.</p>
+				<p>You need Bun, Node.js 22.23.4 or newer, and a domain on Cloudflare. From a copy of the code, one command sets everything up: it signs in to Cloudflare (you click Allow), creates the database and queues, deploys the API and dashboard to a hostname on your domain, and sets your dashboard password. Run it again to update.</p>
 				<pre class={pre}><code>{`git clone https://github.com/vidneat/grosslytics.git
 cd grosslytics && bun install
 bun run setup`}</code></pre>
 				<p>The <a class="text-accent hover:underline" href="/#pricing">Lifetime license</a> (opening soon) will do the same without the code: <code class={code}>npx grosslytics install</code>.</p>
-				<p>On first visit, a self-hosted dashboard asks for your API_TOKEN once and a password; after that you sign in with the password. Five wrong passwords lock sign-in for 15 minutes.</p>
+				<p>On first visit, a self-hosted dashboard asks for your API_TOKEN once and a password; after that you sign in with the password. Repeated sign-in attempts are limited per network.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">

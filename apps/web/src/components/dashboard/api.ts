@@ -15,10 +15,13 @@ export interface Connection {
 }
 
 const KEY = 'gl_connection';
-// Password sign-in stores no secret here. Only the fallback "API on another address" form keeps its token in localStorage.
 export const loadConnection = (): Connection | null => {
 	try {
 		const c = JSON.parse(localStorage.getItem(KEY) || 'null');
+		if (c?.token) {
+			localStorage.removeItem(KEY);
+			return null;
+		}
 		return c?.api && typeof c.token === 'string' && c?.siteId ? c : null;
 	} catch {
 		return null;
@@ -27,11 +30,15 @@ export const loadConnection = (): Connection | null => {
 
 /** Ends the password session (deletes it server-side and clears the cookie). */
 export const logout = (api: string) => fetch(`${api.replace(/\/$/, '')}/api/auth/logout`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then(() => undefined, () => undefined);
-export const saveConnection = (c: Connection | null) => (c ? localStorage.setItem(KEY, JSON.stringify(c)) : localStorage.removeItem(KEY));
+export const saveConnection = (c: Connection | null) => (c && !c.token ? localStorage.setItem(KEY, JSON.stringify(c)) : localStorage.removeItem(KEY));
 
 class FooterRequiredError extends Error {}
 
 export async function apiFetch<T>(c: Pick<Connection, 'api' | 'token'>, path: string, init?: RequestInit): Promise<T> {
+	const url = new URL(c.api || location.origin);
+	if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) {
+		throw new Error('Connect to an HTTPS API address. Local development also supports HTTP on localhost.');
+	}
 	const res = await fetch(`${c.api.replace(/\/$/, '')}${path}`, {
 		...init,
 		headers: { authorization: `Bearer ${c.token}`, 'content-type': 'application/json', ...init?.headers },
@@ -62,6 +69,7 @@ export interface SiteInfo {
 	domain: string;
 	name: string;
 	shared: number;
+	verifyDomain?: boolean;
 	timezone?: string;
 	/** Days raw visit data is kept; 0 is forever */
 	retention?: number;
@@ -180,9 +188,20 @@ export function useLiveSocket(conn: Connection | null) {
 		let pending: any;
 		let flush: ReturnType<typeof setTimeout> | undefined;
 		let first = true; // the snapshot sent on connect shows immediately
-		const open = () => {
-			const url = `${conn.api.replace(/^http/, 'ws').replace(/\/$/, '')}/api/stats/live?siteId=${encodeURIComponent(conn.siteId)}&token=${encodeURIComponent(conn.token)}`;
-			ws = new WebSocket(url);
+		const reconnect = () => {
+			if (!closed) timer = setTimeout(open, Math.min(30_000, 1000 * 2 ** retry.current++));
+		};
+		const open = async () => {
+			const site = encodeURIComponent(conn.siteId);
+			try {
+				const { ticket } = await apiFetch<{ ticket: string }>(conn, `/api/stats/live-ticket?siteId=${site}`);
+				if (closed) return;
+				const url = `${conn.api.replace(/^http/, 'ws').replace(/\/$/, '')}/api/stats/live?siteId=${site}`;
+				ws = new WebSocket(url, ['grosslytics-live', ticket]);
+			} catch {
+				reconnect();
+				return;
+			}
 			ws.onopen = () => (retry.current = 0);
 			ws.onmessage = (m) => {
 				if (closed) return;

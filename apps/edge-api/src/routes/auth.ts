@@ -1,20 +1,22 @@
 import { Hono, type Context } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Bindings } from '../env.js';
 import { hasSession, hashToken, isMaster, SESSION_COOKIE } from '../auth.js';
 import { accountActive, CLOUD_EVENT_CAP, isCloud, sessionAccount, TRIAL_DAYS, usageMonth } from '../cloud.js';
+import { canSendProof, redeemEmailProof, sendEmailProof } from '../email-proof.js';
+import { clientKey, limited } from '../limits.js';
 
 /**
  * /app owner login, like Traks and DataBull: one dashboard password and a 30-day HttpOnly session cookie.
  * Setting (or resetting) the password needs API_TOKEN, so nobody else can claim a fresh deploy.
  */
 export const authRoute = new Hono<{ Bindings: Bindings }>();
+authRoute.use('*', bodyLimit({ maxSize: 8192 }));
 type C = Context<{ Bindings: Bindings }>;
 
 const ITERATIONS = 100_000; // the Workers runtime caps PBKDF2 at 100k iterations
 const SESSION_SECONDS = 30 * 86400;
-const MAX_FAILS = 5;
-const LOCK_SECONDS = 15 * 60;
 const hex = (b: ArrayBuffer | Uint8Array) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, '0')).join('');
 const unhex = (h: string) => new Uint8Array((h.match(/../g) ?? []).map((x) => parseInt(x, 16)));
 const now = () => Math.floor(Date.now() / 1000);
@@ -50,30 +52,12 @@ async function startSession(c: C, accountId?: string) {
 	});
 }
 
-/**
- * One password attempt against a lockable row (`owner_auth` or `accounts`). The try is counted before the slow PBKDF2 check,
- * in one statement, so parallel guesses can't all read "0 failures": the 6th concurrent guess is refused without being checked.
- */
-async function attempt(db: D1Database, table: 'owner_auth' | 'accounts', id: string | number, password: unknown, hash: string): Promise<'ok' | 'wrong' | 'locked'> {
-	const lock = () => db.prepare(`UPDATE ${table} SET failed_count = 0, locked_until = ? WHERE id = ?`).bind(now() + LOCK_SECONDS, id).run();
-	const claimed = await db.prepare(`UPDATE ${table} SET failed_count = failed_count + 1 WHERE id = ? AND locked_until <= ? RETURNING failed_count`).bind(id, now()).first<{ failed_count: number }>();
-	if (!claimed) return 'locked';
-	if (claimed.failed_count > MAX_FAILS) return lock().then(() => 'locked');
-	if (typeof password === 'string' && (await verifyPassword(password, hash))) {
-		await db.prepare(`UPDATE ${table} SET failed_count = 0, locked_until = 0 WHERE id = ?`).bind(id).run();
-		return 'ok';
-	}
-	if (claimed.failed_count >= MAX_FAILS) await lock();
-	return 'wrong';
-}
-const lockedFor = async (db: D1Database, table: 'owner_auth' | 'accounts', id: string | number) => {
-	const row = await db.prepare(`SELECT locked_until FROM ${table} WHERE id = ?`).bind(id).first<{ locked_until: number }>();
-	return Math.max(1, Math.ceil(((row?.locked_until ?? 0) - now()) / 60));
+const readBody = async (c: C) => {
+	if (!/^application\/json(?:\s*;|$)/i.test(c.req.header('content-type') ?? '')) return {};
+	return ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
 };
-
-const readBody = async (c: C) => ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
 const owner = (db: D1Database) =>
-	db.prepare('SELECT password_hash, failed_count, locked_until FROM owner_auth WHERE id = 1').first<{ password_hash: string; failed_count: number; locked_until: number }>();
+	db.prepare('SELECT password_hash FROM owner_auth WHERE id = 1').first<{ password_hash: string }>();
 
 // GET /api/auth/status - what /app should show: set a password, sign in, or the dashboard
 authRoute.get('/status', async (c) => {
@@ -106,17 +90,17 @@ authRoute.post('/setup', async (c) => {
 	return c.json({ ok: true });
 });
 
-// POST /api/auth/login {password} - five wrong passwords lock login for 15 minutes
+// Rate-limit the network before running PBKDF2 instead of locking the target account.
 authRoute.post('/login', async (c) => {
+	if (c.env.ENVIRONMENT === 'production' && !c.env.LOGIN_LIMITER) return c.json({ error: 'Sign-in rate limiting is not configured.' }, 503);
+	if (await limited(c.env.LOGIN_LIMITER, clientKey(c.req.raw))) {
+		return c.json({ error: 'Too many sign-in attempts from this network. Try again in a minute.' }, 429);
+	}
 	if (isCloud(c.env)) return accountLogin(c);
 	const { password } = await readBody(c);
 	const row = await owner(c.env.DB);
 	if (!row) return c.json({ error: 'Set a password first.' }, 409);
-	const result = await attempt(c.env.DB, 'owner_auth', 1, password, row.password_hash);
-	if (result === 'locked') {
-		return c.json({ error: `Too many wrong passwords. Try again in ${await lockedFor(c.env.DB, 'owner_auth', 1)} minutes, or reset it with your API_TOKEN.` }, 429);
-	}
-	if (result === 'wrong') return c.json({ error: 'Wrong password.' }, 401);
+	if (typeof password !== 'string' || password.length > 200 || !(await verifyPassword(password, row.password_hash))) return c.json({ error: 'Wrong password.' }, 401);
 	await c.env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now()).run();
 	await startSession(c);
 	return c.json({ ok: true });
@@ -133,39 +117,67 @@ authRoute.post('/logout', async (c) => {
 	return c.json({ ok: true });
 });
 
-// Hosted Cloud accounts: email + password (same PBKDF2 and lockout as the owner login), 14-day trial, no card up front.
+// Hosted Cloud accounts: verified email + password and a 14-day trial.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const credentials = async (c: C) => {
-	const { email, password } = await readBody(c);
-	return { email: typeof email === 'string' ? email.trim().toLowerCase() : '', password: typeof password === 'string' ? password : '' };
+	const { email, password, code } = await readBody(c);
+	return { email: typeof email === 'string' ? email.trim().toLowerCase() : '', password: typeof password === 'string' ? password : '', code: typeof code === 'string' ? code.trim() : '' };
 };
 
-// POST /api/auth/signup {email, password} - Hosted Cloud only
+async function requestAccountVerification(c: C, email: string) {
+	if (!canSendProof(c.env)) return c.json({ error: 'Email verification is temporarily unavailable.' }, 503);
+	try {
+		await sendEmailProof(c.env, 'account', email, email);
+	} catch {
+		// Keep account existence and mail delivery details out of public responses.
+		console.error('Account email verification delivery failed');
+	}
+	return c.json({ verifyEmail: true }, 202, { 'Cache-Control': 'no-store' });
+}
+
 authRoute.post('/signup', async (c) => {
 	if (!isCloud(c.env)) return c.json({ error: 'Sign-up is only on Hosted Cloud.' }, 404);
-	// Each sign-up is a fresh trial, so cap how fast one address can make them; without the binding there is no limit
+	if (c.env.ENVIRONMENT === 'production' && !c.env.SIGNUP_LIMITER) return c.json({ error: 'Sign-up rate limiting is not configured.' }, 503);
+	// Each verified sign-up is a fresh trial. Production requires the rate limiter binding.
 	if (c.env.SIGNUP_LIMITER && !(await c.env.SIGNUP_LIMITER.limit({ key: c.req.header('cf-connecting-ip') || 'unknown' })).success) {
 		return c.json({ error: 'Too many sign-ups from this network. Wait a minute and try again.' }, 429);
 	}
-	const { email, password } = await credentials(c);
+	const { email, password, code } = await credentials(c);
 	if (!EMAIL.test(email) || email.length > 254) return c.json({ error: 'Enter a valid email.' }, 400);
 	if (password.length < 10 || password.length > 200) return c.json({ error: 'Use a password of at least 10 characters.' }, 400);
+	if (!code) {
+		const existing = await c.env.DB.prepare('SELECT 1 FROM accounts WHERE email = ?').bind(email).first();
+		if (existing) return canSendProof(c.env)
+			? c.json({ verifyEmail: true }, 202, { 'Cache-Control': 'no-store' })
+			: c.json({ error: 'Email verification is temporarily unavailable.' }, 503);
+		// Mail delivery runs out of band so signup timing does not expose registered accounts.
+		if (!canSendProof(c.env)) return c.json({ error: 'Email verification is temporarily unavailable.' }, 503);
+		c.executionCtx.waitUntil(sendEmailProof(c.env, 'account', email, email).catch(() => console.error('Account email verification delivery failed')));
+		return c.json({ verifyEmail: true }, 202, { 'Cache-Control': 'no-store' });
+	}
+	if (!(await redeemEmailProof(c.env.DB, 'account', email, code))) return c.json({ error: 'Invalid or expired verification code.' }, 400);
 	const id = crypto.randomUUID();
-	const res = await c.env.DB.prepare('INSERT INTO accounts (id, email, password_hash, trial_ends_at) VALUES (?, ?, ?, ?) ON CONFLICT (email) DO NOTHING')
-		.bind(id, email, await hashPassword(password), now() + TRIAL_DAYS * 86400)
-		.run();
-	if (!res.meta.changes) return c.json({ error: 'That email already has an account. Sign in instead.' }, 409);
+	const [res] = await c.env.DB.batch([
+		c.env.DB.prepare('INSERT INTO accounts (id, email, password_hash, trial_ends_at) VALUES (?, ?, ?, ?) ON CONFLICT (email) DO NOTHING')
+			.bind(id, email, await hashPassword(password), now() + TRIAL_DAYS * 86400),
+		c.env.DB.prepare('INSERT INTO verified_accounts SELECT id FROM accounts WHERE id = ?').bind(id),
+	]);
+	if (!res?.meta.changes) return c.json({ error: 'That email already has an account. Sign in instead.' }, 409);
 	await startSession(c, id);
 	return c.json({ ok: true }, 201);
 });
 
 async function accountLogin(c: C) {
-	const { email, password } = await credentials(c);
-	const row = await c.env.DB.prepare('SELECT id, password_hash FROM accounts WHERE email = ?').bind(email).first<{ id: string; password_hash: string }>();
-	if (!row) return c.json({ error: 'Wrong email or password.' }, 401);
-	const result = await attempt(c.env.DB, 'accounts', row.id, password, row.password_hash);
-	if (result === 'locked') return c.json({ error: `Too many wrong passwords. Try again in ${await lockedFor(c.env.DB, 'accounts', row.id)} minutes.` }, 429);
-	if (result === 'wrong') return c.json({ error: 'Wrong email or password.' }, 401);
+	const { email, password, code } = await credentials(c);
+	if (!email || !password || password.length > 200) return c.json({ error: 'Wrong email or password.' }, 401);
+	const row = await c.env.DB.prepare('SELECT a.id, a.password_hash, v.account_id AS verified FROM accounts a LEFT JOIN verified_accounts v ON v.account_id = a.id WHERE a.email = ?').bind(email).first<{ id: string; password_hash: string; verified: string | null }>();
+	const matched = await verifyPassword(password, row?.password_hash ?? `pbkdf2$${ITERATIONS}$00000000000000000000000000000000$${'0'.repeat(64)}`);
+	if (!row || !matched) return c.json({ error: 'Wrong email or password.' }, 401);
+	if (!row.verified) {
+		if (!code) return requestAccountVerification(c, email);
+		if (!(await redeemEmailProof(c.env.DB, 'account', email, code))) return c.json({ error: 'Invalid or expired verification code.' }, 400);
+		await c.env.DB.prepare('INSERT INTO verified_accounts VALUES (?) ON CONFLICT DO NOTHING').bind(row.id).run();
+	}
 	await c.env.DB.prepare('DELETE FROM account_sessions WHERE expires_at <= ?').bind(now()).run();
 	await startSession(c, row.id);
 	return c.json({ ok: true });

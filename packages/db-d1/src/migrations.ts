@@ -1,3 +1,5 @@
+import { PAYMENT_FIELDS } from './payment-events.js';
+
 /**
  * Raw SQL migration for initial D1 schema setup.
  * Used by `wrangler d1 migrations apply` and the CLI provisioner.
@@ -333,4 +335,131 @@ CREATE TABLE IF NOT EXISTS site_retention (
 );
 `;
 
-export const ALL_MIGRATIONS = MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS + MIGRATION_003_WAITLIST + MIGRATION_004_REFUNDS + MIGRATION_005_DELIVERY_RECEIPTS + MIGRATION_006_API_TOKENS + MIGRATION_007_OWNER_LOGIN + MIGRATION_008_CLOUD + MIGRATION_009_LICENSES + MIGRATION_010_AI_CRAWLS + MIGRATION_011_SECRETS + MIGRATION_012_FOOTER + MIGRATION_013_RETENTION;
+const paymentColumns = Object.keys(PAYMENT_FIELDS);
+const mirrorPayment = `INSERT INTO payment_records (${paymentColumns.join(', ')})
+  VALUES (${paymentColumns.map((column) => `NEW.${column}`).join(', ')})
+  ON CONFLICT (site_id, gateway, payment_id) DO UPDATE SET
+  ${paymentColumns.filter((column) => !['site_id', 'gateway', 'payment_id'].includes(column)).map((column) =>
+		column === 'status'
+			? "status = CASE WHEN payment_records.status = 'refunded' THEN 'refunded' ELSE excluded.status END"
+			: `${column} = excluded.${column}`).join(', ')};`;
+
+export const MIGRATION_014_SECURITY = `
+CREATE TABLE IF NOT EXISTS verified_domains (
+  domain TEXT PRIMARY KEY,
+  site_id TEXT NOT NULL UNIQUE
+) STRICT;
+CREATE TABLE IF NOT EXISTS site_crawl_keys (
+  site_id TEXT PRIMARY KEY,
+  key_hash TEXT NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS live_tickets (
+  ticket_hash TEXT PRIMARY KEY,
+  site_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('master', 'pat', 'owner', 'account')),
+  credential_hash TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_live_ticket_expiry ON live_tickets(expires_at);
+
+CREATE TABLE IF NOT EXISTS email_proofs (
+  purpose TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  issued_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  PRIMARY KEY (purpose, subject)
+) STRICT;
+CREATE TABLE IF NOT EXISTS verified_accounts (
+  account_id TEXT PRIMARY KEY
+) STRICT;
+CREATE TABLE IF NOT EXISTS license_payments (
+  session_id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  payment_ref TEXT NOT NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_license_payment ON license_payments(provider, payment_ref);
+CREATE TABLE IF NOT EXISTS license_refunds (
+  provider TEXT NOT NULL,
+  payment_ref TEXT NOT NULL,
+  PRIMARY KEY (provider, payment_ref)
+) STRICT;
+CREATE TABLE IF NOT EXISTS billing_subscriptions (
+  provider TEXT NOT NULL,
+  subscription_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  occurred_at INTEGER NOT NULL,
+  period_end INTEGER,
+  customer_id TEXT,
+  account_id TEXT,
+  linked_at INTEGER,
+  PRIMARY KEY (provider, subscription_id)
+) STRICT;
+CREATE TABLE IF NOT EXISTS account_billing (
+  account_id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  subscription_id TEXT NOT NULL,
+  linked_at INTEGER NOT NULL
+) STRICT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_current_subscription ON account_billing(provider, subscription_id);
+
+CREATE TABLE IF NOT EXISTS payment_records (
+  payment_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  gateway TEXT NOT NULL,
+  visitor_id TEXT,
+  customer_email_hash TEXT,
+  customer_email_masked TEXT,
+  plan_name TEXT,
+  gross_amount_cents INTEGER NOT NULL,
+  fee_amount_cents INTEGER NOT NULL DEFAULT 0,
+  net_amount_cents INTEGER NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'usd',
+  status TEXT NOT NULL,
+  is_renewal INTEGER NOT NULL DEFAULT 0,
+  first_touch_source TEXT NOT NULL DEFAULT 'Unattributed',
+  last_touch_source TEXT NOT NULL DEFAULT 'Unattributed',
+  country TEXT DEFAULT '🌍',
+  city TEXT,
+  time_to_convert_hours REAL DEFAULT 0.0,
+  buyer_read_sec INTEGER DEFAULT 0,
+  buyer_scroll_pct INTEGER DEFAULT 0,
+  created_at INTEGER DEFAULT (unixepoch()),
+  PRIMARY KEY (site_id, gateway, payment_id)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_payment_records_site_created ON payment_records(site_id, created_at, status);
+CREATE INDEX IF NOT EXISTS idx_payment_records_ltv ON payment_records(site_id, first_touch_source, created_at);
+
+CREATE TABLE IF NOT EXISTS payment_refunds (
+  payment_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  gateway TEXT NOT NULL,
+  refunded_at INTEGER NOT NULL,
+  PRIMARY KEY (site_id, gateway, payment_id)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_payment_refunds_site_at ON payment_refunds(site_id, refunded_at);
+
+-- Keep deliveries accepted by the previous Worker during rollout in the new ledger.
+CREATE TRIGGER IF NOT EXISTS mirror_legacy_payment_insert AFTER INSERT ON payments BEGIN
+  ${mirrorPayment}
+END;
+CREATE TRIGGER IF NOT EXISTS mirror_legacy_payment_update AFTER UPDATE ON payments BEGIN
+  ${mirrorPayment}
+END;
+CREATE TRIGGER IF NOT EXISTS mirror_legacy_refund AFTER INSERT ON refunds BEGIN
+  INSERT INTO payment_refunds (payment_id, site_id, gateway, refunded_at)
+    SELECT NEW.payment_id, NEW.site_id, gateway, NEW.refunded_at FROM payments
+    WHERE payment_id = NEW.payment_id AND site_id = NEW.site_id ON CONFLICT DO NOTHING;
+END;
+
+CREATE TABLE IF NOT EXISTS security_migrations (
+  id TEXT PRIMARY KEY
+) STRICT;
+INSERT INTO payment_records SELECT * FROM payments WHERE NOT EXISTS (SELECT 1 FROM security_migrations WHERE id = 'payments-scoped-v1') ON CONFLICT DO NOTHING;
+INSERT INTO payment_refunds (payment_id, site_id, gateway, refunded_at)
+  SELECT r.payment_id, r.site_id, p.gateway, r.refunded_at FROM refunds r JOIN payments p
+  ON p.payment_id = r.payment_id AND p.site_id = r.site_id WHERE NOT EXISTS (SELECT 1 FROM security_migrations WHERE id = 'payments-scoped-v1') ON CONFLICT DO NOTHING;
+INSERT INTO security_migrations VALUES ('payments-scoped-v1') ON CONFLICT DO NOTHING;
+`;
+
+export const ALL_MIGRATIONS = MIGRATION_001_INIT + MIGRATION_002_ANNOTATIONS + MIGRATION_003_WAITLIST + MIGRATION_004_REFUNDS + MIGRATION_005_DELIVERY_RECEIPTS + MIGRATION_006_API_TOKENS + MIGRATION_007_OWNER_LOGIN + MIGRATION_008_CLOUD + MIGRATION_009_LICENSES + MIGRATION_010_AI_CRAWLS + MIGRATION_011_SECRETS + MIGRATION_012_FOOTER + MIGRATION_013_RETENTION + MIGRATION_014_SECURITY;

@@ -9,11 +9,13 @@ import type { AttributionModel } from '@grosslytics/shared/types';
 import type { Bindings } from '../env.js';
 import { hashToken, newTokenSecret } from '../auth.js';
 import { REPORTING_CURRENCIES } from '@grosslytics/shared/money';
-import { PAYMENT_GATEWAYS } from '@grosslytics/shared/constants';
+import { FOOTER_SNIPPET, PAYMENT_GATEWAYS } from '@grosslytics/shared/constants';
 import { accountActive, isCloud, sessionAccount } from '../cloud.js';
 import { extractPayment, recordPayment } from './webhooks.js';
 import { reportingCurrency } from '@grosslytics/shared/money';
-import { footerRequired, FOOTER_SNIPPET, verifyFooter } from '../footer.js';
+import { footerRequired, verifyFooter } from '../footer.js';
+import { dnsAnswers, isDnsHostname, isPublicHostname } from '../domains.js';
+import { encryptSiteSecret, hasSiteSecretsKey } from '../site-secrets.js';
 
 export const statsRoute = new Hono<{ Bindings: Bindings }>();
 
@@ -66,6 +68,16 @@ statsRoute.get('/journey/:vid', async (c) => {
 });
 
 // GET /api/stats/live - WebSocket upgrade to SiteLiveHub Durable Object
+statsRoute.get('/live-ticket', async (c) => {
+	const grant = c.get('liveGrant');
+	if (!grant) return c.text('siteId required', 400);
+	const site = await c.env.DB.prepare('SELECT 1 FROM sites WHERE site_id = ?').bind(grant.siteId).first();
+	if (!site) return c.text('Unknown site', 404);
+	const ticket = 'gl_live_' + newTokenSecret().slice('gl_pat_'.length);
+	await c.env.DB.prepare('INSERT INTO live_tickets VALUES (?, ?, ?, ?, unixepoch() + 30)').bind(await hashToken(ticket), grant.siteId, grant.kind, grant.hash).run();
+	return c.json({ ticket }, 200, { 'Cache-Control': 'no-store' });
+});
+
 statsRoute.get('/live', async (c) => {
 	const siteId = c.req.query('siteId');
 	if (!siteId) {
@@ -79,7 +91,12 @@ statsRoute.get('/live', async (c) => {
 	const id = c.env.SITE_LIVE_HUB.idFromName(siteId);
 	const stub = c.env.SITE_LIVE_HUB.get(id);
 
-	return stub.fetch(c.req.raw);
+	const request = new Request(c.req.raw);
+	request.headers.set('x-grosslytics-live-grant', JSON.stringify(c.get('liveGrant')));
+	request.headers.set('sec-websocket-protocol', 'grosslytics-live');
+	request.headers.delete('cookie');
+	request.headers.delete('authorization');
+	return stub.fetch(request);
 });
 
 
@@ -132,14 +149,14 @@ const cloudAccount = (c: Parameters<typeof sessionAccount>[0]) => (isCloud(c.env
 // GET /api/stats/sites - sites this API serves (on Hosted Cloud, the signed-in account's), with the payment gateways that have a webhook secret
 statsRoute.get('/sites', async (c) => {
 	const account = await cloudAccount(c);
-	const cols = "s.site_id AS id, s.domain, s.name, s.public_share_enabled AS shared, COALESCE(s.timezone, 'UTC') AS timezone, (SELECT group_concat(gateway) FROM site_secrets x WHERE x.site_id = s.site_id) AS payments, COALESCE((SELECT days FROM site_retention r WHERE r.site_id = s.site_id), 0) AS retention, EXISTS (SELECT 1 FROM site_footer f WHERE f.site_id = s.site_id) AS footer";
+	const cols = "s.site_id AS id, s.domain, s.name, s.public_share_enabled AS shared, COALESCE(s.timezone, 'UTC') AS timezone, (SELECT group_concat(gateway) FROM site_secrets x WHERE x.site_id = s.site_id) AS payments, COALESCE((SELECT days FROM site_retention r WHERE r.site_id = s.site_id), 0) AS retention, EXISTS (SELECT 1 FROM site_footer f WHERE f.site_id = s.site_id) AS footer, EXISTS (SELECT 1 FROM verified_domains v WHERE v.site_id = s.site_id AND v.domain = s.domain) AS verified";
 	const { results } = await (account
 		? c.env.DB.prepare(`SELECT ${cols} FROM sites s JOIN account_sites a ON a.site_id = s.site_id WHERE a.account_id = ? ORDER BY s.created_at`).bind(account.id)
 		: c.env.DB.prepare(`SELECT ${cols} FROM sites s ORDER BY s.created_at`)
 	).all<Record<string, unknown> & { payments: string | null; footer: number; domain: string }>();
 	// `locked`: the dashboard shows the footer-link step instead of the data (footer.ts)
 	const gate = footerRequired(c.env);
-	return c.json({ sites: results.map(({ footer, ...r }) => ({ ...r, payments: r.payments ? r.payments.split(',') : [], locked: gate && !footer && r.domain !== 'localhost' })) });
+	return c.json({ sites: results.map(({ footer, verified, ...r }) => ({ ...r, shared: isCloud(c.env) && !verified ? 0 : r.shared, verifyDomain: isCloud(c.env), payments: r.payments ? r.payments.split(',') : [], locked: gate && !footer && r.domain !== 'localhost' })) });
 });
 
 const SiteBody = v.object({
@@ -147,7 +164,7 @@ const SiteBody = v.object({
 	domain: v.pipe(
 		v.string(),
 		v.transform((d) => d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[/:?#].*$/, '')),
-		v.regex(/^(localhost|[a-z0-9.-]+\.[a-z]{2,})$/),
+		v.check((domain) => domain === 'localhost' || isDnsHostname(domain)),
 		v.maxLength(255),
 	),
 	name: v.optional(v.pipe(v.string(), v.maxLength(255))),
@@ -170,6 +187,7 @@ statsRoute.post('/sites', async (c) => {
 
 // POST /api/stats/sites/:id/footer - look for the "Powered by Grosslytics" link on the site's homepage now
 statsRoute.post('/sites/:id/footer', async (c) => {
+	if (isCloud(c.env) || !footerRequired(c.env)) return c.json({ error: 'Footer verification is unavailable on this deployment.' }, 404);
 	const id = c.req.param('id');
 	const site = await c.env.DB.prepare('SELECT domain FROM sites WHERE site_id = ?').bind(id).first<{ domain: string }>();
 	if (!site) return c.json({ error: 'Unknown site.' }, 404);
@@ -180,7 +198,7 @@ statsRoute.post('/sites/:id/footer', async (c) => {
 			error:
 				result === 'unreachable'
 					? `Could not load https://${site.domain}/. Check the site is online, then try again.`
-					: `No followed link to grosslytics.com on https://${site.domain}/. Add ${FOOTER_SNIPPET} to the page's HTML, without rel="nofollow", then try again.`,
+					: `No “Powered by Grosslytics” link found on https://${site.domain}/. Add ${FOOTER_SNIPPET} to the page's HTML, then try again.`,
 		},
 		422,
 	);
@@ -215,8 +233,9 @@ statsRoute.post('/sites/:id/secrets', async (c) => {
 	const secret = typeof body.secret === 'string' ? body.secret.trim() : '';
 	if (secret && (secret.length < 8 || secret.length > 512)) return c.json({ error: 'That does not look like a webhook signing secret.' }, 400);
 	const site = c.req.param('id');
+	if (secret && !hasSiteSecretsKey(c.env.SITE_SECRETS_KEY)) return c.json({ error: 'The server needs SITE_SECRETS_KEY to store webhook credentials.' }, 503);
 	await (secret
-		? c.env.DB.prepare('INSERT INTO site_secrets (site_id, gateway, secret) VALUES (?, ?, ?) ON CONFLICT (site_id, gateway) DO UPDATE SET secret = excluded.secret').bind(site, gateway, secret)
+		? c.env.DB.prepare('INSERT INTO site_secrets (site_id, gateway, secret) VALUES (?, ?, ?) ON CONFLICT (site_id, gateway) DO UPDATE SET secret = excluded.secret').bind(site, gateway, await encryptSiteSecret(c.env, site, gateway, secret))
 		: c.env.DB.prepare('DELETE FROM site_secrets WHERE site_id = ? AND gateway = ?').bind(site, gateway)
 	).run();
 	return c.json({ ok: true });
@@ -225,8 +244,37 @@ statsRoute.post('/sites/:id/secrets', async (c) => {
 // POST /api/stats/sites/:id/share - turn the public revenue page on or off
 statsRoute.post('/sites/:id/share', async (c) => {
 	const body = (await c.req.json().catch(() => ({}))) as { enabled?: unknown };
-	await c.env.DB.prepare('UPDATE sites SET public_share_enabled = ? WHERE site_id = ?').bind(body.enabled ? 1 : 0, c.req.param('id')).run();
+	if (typeof body.enabled !== 'boolean') return c.json({ error: 'Choose whether to publish the page.' }, 400);
+	const siteId = c.req.param('id');
+	const update = c.env.DB.prepare('UPDATE sites SET public_share_enabled = ? WHERE site_id = ?').bind(Number(body.enabled), siteId);
+	if (!isCloud(c.env)) {
+		await update.run();
+	} else if (!body.enabled) {
+		await c.env.DB.batch([update, c.env.DB.prepare('DELETE FROM verified_domains WHERE site_id = ?').bind(siteId)]);
+	} else {
+		const site = await c.env.DB.prepare('SELECT domain FROM sites WHERE site_id = ?').bind(siteId).first<{ domain: string }>();
+		if (!site) return c.json({ error: 'Unknown site.' }, 404);
+		if (!isPublicHostname(site.domain)) return c.json({ error: 'Public pages require a public domain.' }, 422);
+		const record = `_grosslytics.${site.domain}`;
+		const answers = await dnsAnswers(record, 'TXT').catch(() => []);
+		if (!answers.some((value) => value === siteId || value === JSON.stringify(siteId))) {
+			return c.json({ error: `Add a TXT record at ${record} with the value ${siteId}, then try again.` }, 422);
+		}
+		const reserve = c.env.DB.prepare('INSERT INTO verified_domains (domain, site_id) VALUES (?, ?) ON CONFLICT DO NOTHING').bind(site.domain, siteId);
+		const publish = c.env.DB.prepare('UPDATE sites SET public_share_enabled = 1 WHERE site_id = ? AND EXISTS (SELECT 1 FROM verified_domains WHERE domain = ? AND site_id = ?)').bind(siteId, site.domain, siteId);
+		const [, result] = await c.env.DB.batch([reserve, publish]);
+		if (!result?.meta.changes) return c.json({ error: 'This domain is already assigned to another public page.' }, 409);
+	}
 	return c.json({ ok: true });
+});
+
+statsRoute.post('/sites/:id/crawl-key', async (c) => {
+	const siteId = c.req.param('id');
+	const site = await c.env.DB.prepare('SELECT 1 FROM sites WHERE site_id = ?').bind(siteId).first();
+	if (!site) return c.json({ error: 'Unknown site.' }, 404);
+	const key = 'gl_crawl_' + newTokenSecret().slice('gl_pat_'.length);
+	await c.env.DB.prepare('INSERT INTO site_crawl_keys VALUES (?, ?) ON CONFLICT (site_id) DO UPDATE SET key_hash = excluded.key_hash').bind(siteId, await hashToken(key)).run();
+	return c.json({ key }, 201, { 'Cache-Control': 'no-store' });
 });
 
 const AdSpendBody = v.object({
@@ -356,7 +404,7 @@ statsRoute.get('/clicks', async (c) => {
 	const { results } = await c.env.DB.prepare(
 		`SELECT event_name AS page, ${m('el')} AS el, COUNT(*) AS clicks, COUNT(DISTINCT visitor_id) AS visitors,
 		 COALESCE(SUM(${m('dead')}), 0) AS dead, COALESCE(SUM(${m('rage')}), 0) AS rage,
-		 COUNT(DISTINCT CASE WHEN visitor_id IN (SELECT visitor_id FROM payments WHERE site_id = ?1 AND status = 'succeeded' AND visitor_id IS NOT NULL) THEN visitor_id END) AS buyers
+		 COUNT(DISTINCT CASE WHEN visitor_id IN (SELECT visitor_id FROM payment_records WHERE site_id = ?1 AND status = 'succeeded' AND visitor_id IS NOT NULL) THEN visitor_id END) AS buyers
 		 FROM events WHERE site_id = ?1 AND event_type = 'click' AND created_at >= ?2 AND created_at < ?3
 		 GROUP BY page, el ORDER BY clicks DESC LIMIT 100`,
 	).bind(siteId, start, end).all();

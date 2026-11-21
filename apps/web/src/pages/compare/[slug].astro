@@ -5,90 +5,68 @@ import RoiCalculator from '../../components/marketing/RoiCalculator.tsx';
 
 export const prerender = true;
 
-/*
- * Every competitor fact below comes from the competitor's own public website (or Google's help center for GA4),
- * checked on VERIFIED. Tracker sizes were measured by downloading each script and compressing it with Brotli
- * (quality 11), the same way packages/tracker/build.ts measures g.js. Re-check before changing any claim.
- * Each page targets one keyword cluster: `keyword` is the primary term; headings and FAQs carry the long tail.
- */
 export function getStaticPaths() {
 	// getStaticPaths runs in isolation, so its constants live inside it
-	const VERIFIED = '2026-11-07';
-	const US = {
-		tracker: '1.5 KB',
-		price: '$0 self-hosted (open source); hosted $5.99/mo; $29 Lifetime with installer, support and commercial license',
-		gateways: 'Stripe, Razorpay, Polar, Paddle, Lemon Squeezy, Dodo Payments, Cashfree, Gumroad, PayPal, RevenueCat',
-		fees: 'Deducted automatically per gateway',
-		cookies: 'No cookies; a random visitor ID in localStorage',
-	};
-	const switchSteps = (them: string, extra?: string) => [
-		`Deploy Grosslytics to your Cloudflare account from /start. The setup checks each step against real data, so you know when it works.`,
-		`Replace the ${them} script tag with the Grosslytics one. You can run both side by side for a week to compare numbers before removing ${them}.`,
-		'Add one webhook URL in your payment provider (Stripe, Razorpay, Polar, Paddle or Lemon Squeezy). New sales are matched to the visitor who made them.',
-		extra ?? 'Add a data-goal attribute to any button you want counted in the “Reached a goal” step.',
-	];
-
 	return [
 		{
 			params: { slug: 'ga4-alternative' },
 			props: {
 				competitor: 'Google Analytics 4',
-				competitorDomain: 'analytics.google.com',
-				keyword: 'GA4 alternative',
-				title: 'GA4 Alternative for SaaS: 1.5 KB, Cookie-Free, Revenue',
-				description: 'A lightweight GA4 alternative for SaaS founders: a 1.5 KB cookie-free script that credits each Stripe or Paddle sale to the channel that brought it.',
-				h1: 'The lightweight GA4 alternative that follows the money.',
-				answer: 'We recommend keeping Google Analytics 4 if you rely on its Google Ads and Search Console integrations. If you want a focused answer to which channels bring in revenue, consider Grosslytics: its 1.5 KB cookie-free tracker works with payment webhooks to attribute sales after fees. GA4 is free and offers deeper reporting, but its script is about 125 KB and revenue requires ecommerce events to be sent to it.',
-				whatIs: 'Google Analytics 4 is Google’s free web and app analytics. It is event-based, integrates with Google Ads, Search Console and BigQuery, and offers explorations, audiences and multiple attribution settings. It uses cookies, so many regions need a consent banner. User-level data in standard properties is kept for 2 or 14 months, set by you.',
+				title: 'GA4 vs Grosslytics for SaaS Revenue Attribution',
+				description: 'Compare GA4 purchase events with Grosslytics payment webhooks. See what each tool measures and how to verify revenue by channel before switching.',
+				h1: 'GA4 vs Grosslytics for SaaS revenue attribution',
+				answer: 'Keep GA4 if you use Google Ads conversions, BigQuery export or web and app analytics. Grosslytics is an option if your main question is which traffic sources lead to payments in Stripe or Paddle. GA4 reports the purchase events you send it. Grosslytics records payment webhooks and credits a source when it can match the payment to a tracked visitor.',
+				whatIs: 'Google Analytics 4 is Google’s event-based analytics for websites and apps. It offers audiences, explorations and integrations with Google Ads, Search Console and BigQuery. Standard properties offer 2 or 14 months of user-level retention. That setting affects explorations and funnel reports, while standard aggregated reports are unaffected.',
 				rows: [
-					['Tracker size (Brotli)', '125 KB (gtag.js)', US.tracker],
-					['Price', 'Free', US.price],
-					['Revenue', 'Ecommerce events you send yourself', 'Payment webhooks credit each sale to a channel'],
-					['Gateway fees', 'Not handled', US.fees],
-					['Setup', 'Tag, events, conversions and reports to configure', 'One script tag and one webhook URL'],
-					['User-level data retention', '2 or 14 months (standard properties)', 'As long as you keep it in your own database'],
-					['Cookies', 'Uses cookies', US.cookies],
+					['Price', 'Standard property available free', 'Free self-hosted option and paid plans'],
+					['Revenue', 'Purchase and refund events you send', 'Payment webhooks with source credit when a visitor matches'],
+					['Gateway fees', 'Reconcile separately', 'Uses actual fees when supported or estimates from the configured schedule'],
+					['Setup', 'Google tag and ecommerce events', 'Tracker, checkout visitor ID and signed webhooks'],
+					['User-level data retention', '2 or 14 months (standard properties)', 'You control retention in your self-hosted database'],
+					['Browser storage', 'Analytics cookies when storage consent is granted', 'Random visitor ID in localStorage'],
 					['Google Ads and Search Console', 'Built in', 'Not integrated'],
 				],
 				chooseThem: ['You buy Google Ads and need conversion data sent back to Google', 'You need Search Console, BigQuery export or audiences', 'You have an analyst who uses explorations and custom reports'],
-				chooseUs: ['You want one page that ranks channels by revenue', 'You want a script 1% of the size and no cookies', 'You do not want to write ecommerce event code', 'You are a SaaS or indie founder paid through Stripe, Razorpay, Polar, Paddle or Lemon Squeezy'],
+				chooseUs: ['You want to compare net revenue per visitor by source', 'You want payment confirmations from a supported provider', 'You want to keep the analytics database in your own Cloudflare account'],
 				pricing: [
 					'Google Analytics 4 is free; Google Analytics 360 is the paid enterprise tier. The cost is in setup time: tags, events, key events and reports, and keeping consent rules right.',
-					'Grosslytics self-hosted is $0 on your own Cloudflare account. Hosted plans are offered from /start.',
+					'Grosslytics offers a free self-hosted option on your own Cloudflare account. The free setup requires a “Powered by Grosslytics” link for dashboard access. Your Cloudflare usage determines any hosting costs.',
 				],
 				deep: [
 					{
-						h2: 'Why revenue is hard in GA4',
+						h2: 'How each tool records a payment',
 						ps: [
-							'GA4 knows about a purchase only if your site sends a purchase event with the value, usually from a thank-you page. Subscription renewals, refunds and payment fees happen at your payment provider, not on your site, so GA4 never sees them unless you build that pipeline yourself.',
-							'Grosslytics starts from the payment side. Each signed webhook from your provider is matched to the visitor who checked out, so renewals stay credited to the channel that found the customer, full Stripe refunds drop out of revenue, and fees are subtracted automatically.',
+							'GA4 records a purchase when your integration sends a purchase event. Send a distinct transaction ID for each payment and include the value and currency. If you want renewals and refunds reflected in GA4, send those events from your billing integration too.',
+							'Grosslytics starts with a signed payment webhook. Stripe Payment Links can carry a visitor ID automatically. With Checkout Sessions created on your server, pass the visitor ID when you create the session and include it in subscription metadata to match future invoices. A payment without a match can still appear as Unattributed.',
 						],
 					},
 					{
-						h2: 'Speed and consent',
+						h2: 'How browser storage affects measurement',
 						ps: [
-							'At about 125 KB compressed, gtag.js is roughly 80 times the size of the Grosslytics tracker. And because GA4 uses cookies, sites with visitors in the EU and UK usually need a consent banner, and visitors who decline are missing from the data. Grosslytics sets no cookies; it does keep a random visitor ID in localStorage, so check your local rules.',
+							'Google’s Consent Mode can block tags before consent or load them with reduced data collection, depending on your setup. Grosslytics uses localStorage for its visitor ID. If that ID is cleared or unavailable at checkout, the payment may lose its link to the original visit. Review your consent setup for each tool.',
 						],
 					},
 				],
-				switching: switchSteps('GA4', 'Add data-goal attributes to the buttons behind the GA4 key events you care about; they count toward the “Reached a goal” step. Keep GA4 running if you still need its Google Ads integration.'),
 				faqs: [
-					{ question: 'What is the best Google Analytics alternative for SaaS?', answer: 'For SaaS founders who want revenue by channel, a revenue-first tool like Grosslytics answers that directly. For private traffic analytics only, Plausible or Fathom. For product analytics with session replay, PostHog.' },
-					{ question: 'Is there a free Google Analytics alternative?', answer: 'Yes. Grosslytics is free to self-host on your own Cloudflare account, and some open-source tools such as Umami and Matomo can be self-hosted for free too.' },
-					{ question: 'Can Grosslytics replace GA4 completely?', answer: 'For traffic sources, pages, countries, devices and revenue attribution, yes. It does not replace Google Ads conversion import, Search Console data or BigQuery export, so keep GA4 if you depend on those.' },
-					{ question: 'Does Grosslytics need a cookie banner?', answer: 'It sets no cookies and stores no IP addresses. It keeps a random visitor ID in localStorage to connect purchases to visits; some privacy laws treat that like a cookie, so check what your visitors’ region requires.' },
-					{ question: 'How long does Grosslytics keep data?', answer: 'Data lives in the D1 database in your own Cloudflare account and stays until you delete it. GA4 standard properties keep user-level data for 2 or 14 months.' },
+					{ question: 'Can I keep GA4 when I add Grosslytics?', answer: 'Yes. Keep GA4 for Google Ads conversions, audiences, Search Console and BigQuery. You can use Grosslytics for payment attribution alongside it.' },
+					{ question: 'Can I take my revenue history with me?', answer: 'Grosslytics can import past Stripe payments with their original dates. Imported payments show as Unattributed when there is no recorded visit to match. Keep access to GA4 for existing reports.' },
+					{ question: 'What happens if the browser clears the visitor ID?', answer: 'The payment can still arrive through a webhook. Grosslytics can match a returning buyer to a previous payment by email when available. If it cannot match the buyer, the payment appears as Unattributed.' },
 				],
 				theyLead: ['Free, with very deep reporting', 'Google Ads and Search Console integration', 'Industry-standard tooling and support'],
-				weDiffer: ['About 1% of the tracker weight', 'No cookies', 'Sales from your payment provider, credited to channels without custom event code'],
-				verified: VERIFIED,
-				sources: [{ label: 'googletagmanager.com/gtag/js (measured)', url: 'https://www.googletagmanager.com/gtag/js' }, { label: 'GA4 data retention (Google help)', url: 'https://support.google.com/analytics/answer/7667196' }],
+				weDiffer: ['Payment amounts from signed webhooks', 'Visitor IDs stored without cookies', 'Net revenue per visitor with provider fee estimates'],
+				verified: '2026-11-21',
+				sources: [
+					{ label: 'GA4 purchase events', url: 'https://developers.google.com/analytics/devguides/collection/ga4/set-up-ecommerce' },
+					{ label: 'GA4 data retention', url: 'https://support.google.com/analytics/answer/7667196' },
+					{ label: 'Google Consent Mode', url: 'https://developers.google.com/tag-platform/security/concepts/consent-mode' },
+					{ label: 'Grosslytics payment setup', url: '/docs/#payments' },
+				],
 			},
 		},
 	];
 }
 
-const { competitor, competitorDomain, title, description, h1, answer, whatIs, rows, chooseThem, chooseUs, pricing, deep, switching, faqs, theyLead, weDiffer, sources, verified: lastVerifiedDate } = Astro.props;
+const { competitor, title, description, h1, answer, whatIs, rows, chooseThem, chooseUs, pricing, deep, faqs, theyLead, weDiffer, sources, verified: lastVerifiedDate } = Astro.props;
 const related = [
 	{ href: '/compare/datafast-alternative/', name: 'DataFast' },
 	{ href: '/compare/databull-alternative/', name: 'DataBull' },
@@ -116,7 +94,7 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 				<ol class="flex items-center gap-2">
 					<li><a href="/" class="hover:text-ink">Home</a></li>
 					<li aria-hidden="true">›</li>
-					<li>Compare</li>
+				<li><a href="/compare/" class="hover:text-ink">Compare</a></li>
 					<li aria-hidden="true">›</li>
 					<li class="text-ink-2" aria-current="page">{competitor} alternative</li>
 				</ol>
@@ -127,7 +105,7 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 				<h1 class="text-[clamp(36px,5.5vw,56px)] font-semibold leading-[1.06] tracking-[-0.035em]">{h1}</h1>
 				<p class="mt-5 text-[21px] leading-relaxed text-ink-2">{answer}</p>
 				<p class="mt-6 text-[13px] text-ink-3">
-					By the Grosslytics team · <time datetime={lastVerifiedDate}>Last verified {lastVerifiedDate}</time> · Checked against <span class="text-ink-2">{competitorDomain}</span>
+					Published by Grosslytics, which makes the product compared here · <time datetime={lastVerifiedDate}>Updated {lastVerifiedDate}</time>
 				</p>
 			</header>
 
@@ -159,8 +137,8 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 					</table>
 				</div>
 				<p class="mt-4 text-[13px] leading-relaxed text-ink-3">
-					{competitor} details are from their public website, checked {lastVerifiedDate}. Tracker sizes were measured by compressing each script with Brotli. Sources:
-					{sources.map((src, i) => <>{i > 0 && ', '}<a class="underline decoration-ink-3/40 hover:text-ink-2" href={src.url} rel="nofollow noopener" target="_blank">{src.label}</a></>)}.
+					Documentation for this comparison includes
+					{sources.map((src, i) => <>{i > 0 ? ', ' : ' '}<a class="underline decoration-ink-3/40 hover:text-ink-2" href={src.url}>{src.label}</a></>)}.
 				</p>
 			</section>
 
@@ -182,6 +160,7 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 			<section class="prose-g mt-14 text-[19px] leading-relaxed">
 				<h2 class={h2}>{competitor} pricing vs Grosslytics pricing</h2>
 				{pricing.map((p) => <p>{p}</p>)}
+				<p>See <a href="/terms/">Grosslytics plan terms</a> for the conditions of each option.</p>
 			</section>
 
 			{deep.map((s) => (
@@ -214,21 +193,20 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 			</section>
 
 			<section class="prose-g mt-16 text-[19px] leading-relaxed">
-				<h2 class={h2}>How to switch from {competitor}</h2>
+				<h2 class={h2}>How to verify revenue before switching</h2>
 				<ol class="mt-4 list-decimal space-y-3 pl-6">
-					{switching.map((step) => <li>{step}</li>)}
+					<li>Keep your GA4 tag and key events running. <a href="/docs/#install">Add the Grosslytics tracker</a> to the landing page and connect a test checkout using the <a href="/blog/stripe-revenue-attribution/">Stripe setup guide</a>.</li>
+					<li>Open a tagged test URL such as <code>?utm_source=qa&amp;utm_medium=referral</code> in a fresh browser session and complete a sandbox payment. In GA4 DebugView, confirm the purchase event has the expected transaction ID, value, and currency. In Grosslytics, check that the recorded sale is credited to <code>qa</code>.</li>
+					<li>If GA4 has the event but Grosslytics shows Unattributed, check whether Stripe received the visitor ID. If only Grosslytics shows the payment, check the GA4 event delivery. Once both records appear, compare the same currency and reporting window, and reconcile the transaction against Stripe.</li>
+					<li>Repeat the check for a renewal or refund if either affects how you report revenue. Keep GA4 in place if an Ads conversion or report still depends on it.</li>
 				</ol>
-				<p class="mt-4">Allow time to configure and verify the integration. <a class="text-accent hover:underline" href="/start/">Start the setup ›</a></p>
+				<p class="mt-4">See the <a href="/blog/track-chatgpt-traffic-revenue/">documented Stripe sandbox example</a> for a tagged visit matched to a payment in Grosslytics.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[19px] leading-relaxed">
-				<h2 class={h2}>Why net revenue matters</h2>
-				<p>
-					Payment providers keep a cut of every sale: Stripe's standard US card rate is 2.9% + 30¢, and merchant-of-record platforms take more. Add ad spend, and a channel with $10,000 in sales, $8,000 in ads and $450 in fees made you <strong>$1,550</strong>.
-				</p>
-				<p>
-					Grosslytics ranks channels by <strong>revenue per visitor</strong> after those costs, so you can see which ones actually pay.
-				</p>
+				<h2 class={h2}>Why the two revenue reports can differ</h2>
+				<p>Suppose a purchase is $100 before tax, the fee is $3, and you spend $20 on ads for the source. If you send a $100 purchase value to GA4, that event contributes $100 to purchase revenue. In Grosslytics, the payment is $97 net of fees. The separate profit figure is $77 after the ad spend you enter. These are illustrative amounts.</p>
+				<p>Source credit can also differ. GA4’s Traffic acquisition report groups results by session source. Grosslytics first touch credits the visitor’s first recorded source. Choose the source view that matches the question you are answering. See <a href="https://support.google.com/analytics/answer/14731736">Google’s acquisition report guide</a> and the <a href="/docs/#dashboard">Grosslytics dashboard definitions</a>.</p>
 			</section>
 
 			<section class="mt-16 border-t border-line pt-12">

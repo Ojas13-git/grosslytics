@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { PRESENCE_TTL_MS } from '@grosslytics/shared/constants';
 import type { LivePresenceUpdate, LiveSaleUpdate, LiveUpdate } from '@grosslytics/shared/types';
 import type { Bindings } from './env.js';
+import { liveAuthorized, type LiveGrant } from './live-auth.js';
 
 interface VisitorPresence {
 	visitorId: string;
@@ -31,16 +32,22 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 
 		// 1. WebSocket upgrade for founder dashboard islands
 		if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+			const raw = request.headers.get('x-grosslytics-live-grant');
+			if (!raw) return new Response('Unauthorized', { status: 401 });
+			const grant = JSON.parse(raw) as LiveGrant;
+			if (!(await liveAuthorized(this.env, grant))) return new Response('Unauthorized', { status: 401 });
 			const pair = new WebSocketPair();
 			const [client, server] = [pair[0], pair[1]];
 
 			// Cloudflare WebSocket Hibernation API: zero idle billing
 			this.ctx.acceptWebSocket(server);
+			server.serializeAttachment(grant);
+			await this.armAlarm();
 
 			// Send immediate initial presence snapshot
 			server.send(JSON.stringify(this.buildPresenceMessage()));
 
-			return new Response(null, { status: 101, webSocket: client });
+			return new Response(null, { status: 101, webSocket: client, headers: { 'sec-websocket-protocol': 'grosslytics-live' } });
 		}
 
 		// 2. Internal presence ping from POST /api/event
@@ -49,14 +56,14 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 			this.visitors.set(data.visitorId, data);
 			await this.ctx.storage.put(`v:${data.visitorId}`, data);
 			await this.armAlarm();
-			this.broadcastPresence();
+			await this.broadcastPresence();
 			return new Response('OK', { status: 200 });
 		}
 
 		// 3. Internal sale notification from payment webhooks
 		if (url.pathname === '/internal/sale' && request.method === 'POST') {
 			const sale = (await request.json()) as LiveSaleUpdate;
-			this.broadcast(sale);
+			await this.broadcast(sale);
 			return new Response('OK', { status: 200 });
 		}
 
@@ -77,11 +84,13 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 		for (let i = 0; i < stale.length; i += 128) await this.ctx.storage.delete(stale.slice(i, i + 128));
 
 		if (stale.length) {
-			this.broadcastPresence();
+			await this.broadcastPresence();
+		} else {
+			await this.authorizedSockets();
 		}
 
 		// Only while someone is online: an idle hub must not wake every minute forever
-		if (this.visitors.size) await this.ctx.storage.setAlarm(Date.now() + 60_000);
+		if (this.visitors.size || this.ctx.getWebSockets().length) await this.ctx.storage.setAlarm(Date.now() + 60_000);
 	}
 
 	/** Starts the eviction alarm unless one is already pending. */
@@ -89,8 +98,8 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 		if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 60_000);
 	}
 
-	webSocketClose(ws: WebSocket): void {
-		ws.close();
+	webSocketClose(ws: WebSocket, code: number, reason: string): void {
+		ws.close(code === 1005 || code === 1006 ? 1000 : code, reason);
 	}
 
 	private buildPresenceMessage(): LivePresenceUpdate {
@@ -105,15 +114,32 @@ export class SiteLiveHub extends DurableObject<Bindings> {
 		};
 	}
 
-	private broadcastPresence(): void {
+	private async broadcastPresence(): Promise<void> {
 		// Nobody watching: don't sort every online visitor on each page view just to throw the message away
 		if (!this.ctx.getWebSockets().length) return;
-		this.broadcast(this.buildPresenceMessage());
+		await this.broadcast(this.buildPresenceMessage());
 	}
 
-	private broadcast(msg: LiveUpdate): void {
-		const payload = JSON.stringify(msg);
+	private async authorizedSockets(): Promise<WebSocket[]> {
+		const checks = new Map<string, Promise<boolean>>();
 		const sockets = this.ctx.getWebSockets();
+		const allowed = await Promise.all(sockets.map(async (socket) => {
+			const grant = socket.deserializeAttachment() as LiveGrant | null;
+			if (grant) {
+				const key = JSON.stringify(grant);
+				const result = checks.get(key) ?? liveAuthorized(this.env, grant).catch(() => false);
+				checks.set(key, result);
+				if (await result) return true;
+			}
+			try { socket.close(1008, 'Access expired'); } catch {}
+			return false;
+		}));
+		return sockets.filter((_, index) => allowed[index]);
+	}
+
+	private async broadcast(msg: LiveUpdate): Promise<void> {
+		const payload = JSON.stringify(msg);
+		const sockets = await this.authorizedSockets();
 		for (let i = 0; i < sockets.length; i++) {
 			try {
 				sockets[i]!.send(payload);

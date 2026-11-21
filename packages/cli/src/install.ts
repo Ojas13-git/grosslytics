@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { pbkdf2Sync, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** Saved next to the bundle so re-running `install` updates the same deployment instead of asking again. */
@@ -24,7 +24,10 @@ export const loadState = (): Partial<InstallState> => {
 		return {};
 	}
 };
-export const saveState = (s: InstallState) => writeFileSync(STATE, JSON.stringify(s, null, 2));
+export const saveState = (s: InstallState) => {
+	writeFileSync(STATE, JSON.stringify(s, null, 2), { mode: 0o600 });
+	chmodSync(STATE, 0o600);
+};
 
 /** Same format as the API's hashPassword (apps/edge-api/src/routes/auth.ts), so /app accepts it. */
 export function hashPassword(password: string): string {
@@ -43,7 +46,7 @@ export function apiToml(s: Pick<InstallState, 'host' | 'zone' | 'releasesBucket'
 main = "index.js"
 no_bundle = true
 compatibility_date = "2024-12-01"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public", "web_socket_auto_reply_to_close"]
 routes = [{ pattern = "${s.host}/api/*", zone_name = "${s.zone}" }]
 
 [[d1_databases]]
@@ -79,12 +82,33 @@ name = "SIGNUP_LIMITER"
 namespace_id = "1002"
 simple = { limit = 5, period = 60 }
 
+[[ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "1003"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "INGEST_SOURCE_LIMITER"
+namespace_id = "1004"
+simple = { limit = 300, period = 60 }
+
+[[ratelimits]]
+name = "INGEST_SITE_LIMITER"
+namespace_id = "1005"
+simple = { limit = 6000, period = 60 }
+
+[[ratelimits]]
+name = "LICENSE_LIMITER"
+namespace_id = "1006"
+simple = { limit = 15, period = 60 }
+
 [triggers]
 crons = ["17 3 * * *"]
 
 [vars]
 ENVIRONMENT = "production"
 TRACKER_ORIGIN = "https://${s.host}"
+${s.host === 'grosslytics.com' ? 'PLUNK_FROM_EMAIL = "support@grosslytics.com"\n' : ''}
 ${s.requireFooter ? 'REQUIRE_FOOTER = "1"\n' : ''}${s.releasesBucket ? `\n[[r2_buckets]]\nbinding = "RELEASES"\nbucket_name = "${s.releasesBucket}"\n` : ''}`;
 }
 
@@ -107,7 +131,9 @@ directory = "./dist"
 export function noindex(host: string, dist: string): void {
 	if (host === 'grosslytics.com') return;
 	// Crawling stays allowed so search engines can see the noindex header; the header covers every static page and asset
-	writeFileSync(join(dist, '_headers'), '/*\n  X-Robots-Tag: noindex, nofollow\n');
+	const headersFile = join(dist, '_headers');
+	const headers = existsSync(headersFile) ? readFileSync(headersFile, 'utf8') : '';
+	if (!headers.includes('X-Robots-Tag: noindex, nofollow')) writeFileSync(headersFile, `${headers.trimEnd()}\n/*\n  X-Robots-Tag: noindex, nofollow\n`.trimStart());
 	writeFileSync(join(dist, 'robots.txt'), 'User-agent: *\nAllow: /\n');
 }
 

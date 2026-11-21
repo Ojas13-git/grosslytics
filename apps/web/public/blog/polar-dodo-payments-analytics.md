@@ -1,14 +1,16 @@
 # How to Track Polar & Dodo Payments Revenue by Channel
 
-> Canonical URL: https://grosslytics.com/blog/polar-dodo-payments-analytics/ | Updated: 2026-11-10
+> Canonical URL: https://grosslytics.com/blog/polar-dodo-payments-analytics/ | Updated: 2026-11-21
 
 I recommend treating Polar, Dodo Payments and Lemon Squeezy as separate integrations when tracking revenue by channel. Each needs the visitor ID in its own checkout field and a verified payment event sent to the matching Grosslytics endpoint: reference_id for Polar links, metadata_visitor_id for supported Dodo links, and checkout[custom][visitor_id] for Lemon Squeezy links. I'll walk through each path so you can connect the sale to its source.
+
+**Lemon Squeezy is winding down.** It closed new store sign-ups on November 16, 2026, and says it will stop processing payments on March 31, 2027. The Lemon Squeezy instructions below are for existing stores. If you are moving to another provider, test the visitor ID handoff and the first renewal again with the new checkout. See [Lemon Squeezy’s migration guide](https://docs.lemonsqueezy.com/migration).
 
 ## Key takeaways
 
 - Install the tracker on the page where the visitor arrives; a checkout link shared directly from a social post skips that site visit.
 - Use provider-specific fields and webhook event types rather than one shared custom-data parameter.
-- Webhooks deliver signed events that update the payment ledger; they are not read-only API connections.
+- Verify that the signed webhook creates a sale with the expected source. A successful delivery can still be ignored.
 - Grosslytics subtracts reported tax and estimated fees, but renewal classification and refund coverage differ by provider.
 
 ## What does channel attribution need from a Merchant of Record checkout?
@@ -36,7 +38,7 @@ https://your-site.example/pricing?utm_source=x&utm_medium=social&utm_campaign=la
 
 Use a distinct campaign value for each post you want to distinguish. Linking straight from a social post to the provider's checkout does not create a Grosslytics visit on your website.
 
-The [installation reference](/docs#install) covers self-hosted tracker domains and API routing. Read gl_vid after the tracker loads if your application creates checkout sessions programmatically.
+The [installation reference](/docs/#install) covers self-hosted tracker domains and API routing. Read `gl_vid` after the tracker loads if your application creates checkout sessions programmatically.
 
 ## Step 2: Which identity field should each provider receive?
 
@@ -44,9 +46,9 @@ Use the field expected by both the provider and the current Grosslytics extracto
 
 | Provider | Supported anchor-link field | Programmatic checkout field | Grosslytics reads from the event |
 | --- | --- | --- | --- |
-| Polar | reference_id | metadata.visitor_id | data.metadata.visitor_id or data.metadata.reference_id |
-| Dodo Payments | metadata_visitor_id | metadata.visitor_id | data.metadata.visitor_id |
-| Lemon Squeezy | checkout[custom][visitor_id] | checkout_data.custom.visitor_id | meta.custom_data.visitor_id |
+| Polar | `reference_id` on `buy.polar.sh` or `polar.sh` | `metadata.visitor_id` | `data.metadata.visitor_id` or `data.metadata.reference_id` |
+| Dodo Payments | `metadata_visitor_id` on `checkout.dodopayments.com` | `metadata.visitor_id` | `data.metadata.visitor_id` |
+| Lemon Squeezy | `checkout[custom][visitor_id]` on a `lemonsqueezy.com` subdomain | `checkout_data.custom.visitor_id` | `meta.custom_data.visitor_id` |
 
 Grosslytics decorates supported anchor links if the relevant parameter is absent. JavaScript redirects and custom server-created sessions need explicit handling; an existing reference value is not overwritten.
 
@@ -144,7 +146,7 @@ https://YOUR_ANALYTICS_DOMAIN/api/webhooks/lemonsqueezy?siteId=YOUR_SITE_ID
 | Dodo Payments | payment.succeeded | refund.succeeded handles explicitly full refunds; partial refunds ignored | Standard Webhooks headers |
 | Lemon Squeezy | order_created, subscription_payment_success | Refund events not handled | X-Signature HMAC |
 
-These endpoints update the analytics ledger; describing them as read-only would be inaccurate. Use the [payment integration reference](/docs#payments) and each provider's current delivery configuration.
+Use the [payment integration reference](/docs/#payments) to set each endpoint’s signing secret and reporting currency.
 
 The signature must be checked against the unmodified request body. Lemon Squeezy documents its signature header in [Signing Requests](https://docs.lemonsqueezy.com/help/webhooks/signing-requests); a successful HTTP delivery is not by itself proof that the intended sale was attributed.
 
@@ -152,7 +154,9 @@ The signature must be checked against the unmodified request body. Lemon Squeezy
 
 Renewal classification depends on the extractor's recognized fields, while tax is removed only when the payment event supplies the expected tax amount.
 
-The current Polar extractor marks a renewal when billing_reason is subscription_cycle. The Lemon Squeezy extractor marks subscription_payment_success as a renewal, so check the first subscription invoice alongside order_created rather than assuming its first-payment classification matches your business definition.
+Grosslytics marks a Polar payment as a renewal when `billing_reason` is `subscription_cycle`. Polar documents the billing reasons for [new orders, renewals and prorations](https://polar.sh/docs/api-reference/webhooks/order.created).
+
+Lemon Squeezy’s [subscription event sequence](https://docs.lemonsqueezy.com/help/webhooks/event-types) shows that the initial subscription payment can send both `order_created` and `subscription_payment_success`. Grosslytics reads the order and invoice as separate objects and marks the invoice as a renewal. If you enable both events, compare the first paid invoice and order against the recorded sales. Two analytics entries for one charge can inflate revenue and renewal counts.
 
 The Dodo extractor currently marks every successful payment as a new sale, including recurring charges, so the new-versus-renewal customer counts will not be accurate.
 
@@ -165,21 +169,28 @@ revenue_after_assumed_fee = 100 - 6 = 94
 
 The configured gateway schedule estimates fees; it does not read the exact settlement cost for these three providers. A missing tax field cannot be repaired by assuming all payments have the same tax rate.
 
-## How should you verify the first attributed sale?
+## What did the Grosslytics webhook tests verify?
 
-Run a separate test purchase for each provider and inspect both its event and the resulting source report.
+On November 21, 2026, we ran the repository’s Polar and Dodo integration tests. Both passed. The tests sent signed sample events to the local app and checked the resulting payment records. No provider checkout was involved.
 
-1. Visit your tagged landing page in a fresh browser session.
-2. Check that the visitor ID reaches the provider checkout.
-3. Complete a test payment and inspect the resulting payment event.
-4. Confirm the matching source, amount and reporting currency.
-5. Test a recurring charge and compare its classification.
-6. Test refunds within the provider's current supported limits.
-7. Check the initial order and subscription invoice do not produce an unintended double count.
+| Test | What the local app recorded |
+| --- | --- |
+| Polar `order.paid` | Matched `data.metadata.reference_id` to the seeded visitor and credited the sale to `google.com`. |
+| Dodo `payment.succeeded` | Matched `data.metadata.visitor_id` and credited `google.com`. The sample showed $100 after tax and $95.20 after the estimated fee. Delivering the same payment again did not create another sale. |
+| Dodo `refund.succeeded` | The partial refund left the sale in revenue. The full refund marked it refunded. |
 
-Grosslytics uses one reporting currency per site and rejects different-currency payments rather than converting them. Use the [dashboard definitions](/docs#dashboard) to distinguish first touch, last touch, recorded revenue and fee estimates.
+## How should you verify your first attributed sale?
 
-Choose the provider-specific path that matches your checkout. Next, reconcile one payment and one recurring-charge attempt for each provider you actually use before enabling live reporting.
+Open a tagged landing page in a fresh browser session, complete a provider test payment, and compare its ID, amount, currency and source with the Grosslytics sale. Repeat with a renewal and refund if they affect your reporting.
+
+| What you see | Where to check |
+| --- | --- |
+| The sale appears as Unattributed | Compare the browser’s `gl_vid` with the visitor field in the payment event. If the field is missing, inspect the checkout handoff. |
+| The endpoint returns `401` | Verify that the endpoint and the Grosslytics site use the same signing secret. |
+| The endpoint returns `422` | Check that the payment currency matches the site’s reporting currency. Grosslytics does not convert it. |
+| The endpoint returns `200`, but no new sale appears | Inspect the response body. `ignored` indicates the event did not produce a payment record. `deduplicated` indicates the event or payment was already processed. |
+
+Use the [dashboard definitions](/docs/#dashboard) to reconcile the attributed source, tax and estimated fees against the payment provider. For the distinction between a tagged visit and the resulting payment, see the [Stripe sandbox example](/blog/track-chatgpt-traffic-revenue/#what-happened-when-we-tested-it).
 
 ## Frequently asked questions
 

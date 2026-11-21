@@ -19,7 +19,7 @@ export const GET: APIRoute = async ({ params, url }) => {
 	const siteId = params.siteId || 'demo';
 	const api = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:8787' : url.origin);
 	const amount = await verifiedNet(api, siteId);
-	const label = amount ? 'Verified net, 30 days' : 'Not verified yet';
+	const label = amount ? 'Public net, 30 days' : 'No public revenue';
 	const verifiedAmount = amount ?? '—';
 
 	// One text run, so the amount always starts 8px after the label whatever font the viewer has. SVG can't measure text, so the width is a generous estimate at 12px
@@ -39,8 +39,7 @@ export const GET: APIRoute = async ({ params, url }) => {
 		headers: {
 			'Content-Type': 'image/svg+xml',
 			// a failed lookup must not stick: only a badge with an amount is cached
-			'Cache-Control': amount ? 'public, max-age=300, stale-while-revalidate=86400' : 'no-store',
-			'X-Grosslytics-Site': siteId,
+			'Cache-Control': 'no-store',
 		},
 	});
 };

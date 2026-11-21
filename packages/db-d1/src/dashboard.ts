@@ -51,7 +51,7 @@ ev AS (SELECT e.*, ${eventCategory('e')} AS category FROM events e WHERE site_id
 	AND ((?4 IS NULL AND ?5 IS NULL AND ?6 IS NULL AND ?7 IS NULL) OR visitor_id IN fv)), -- unfiltered, every event's visitor is in fv already: skip building it
 vv AS (SELECT * FROM visitors WHERE site_id = ?1 AND visitor_id IN fv),
 pay AS (
-	SELECT * FROM payments WHERE site_id = ?1 AND status = 'succeeded' AND upper(currency) = ?11 AND created_at >= ?2 AND created_at < ?3
+	SELECT * FROM payment_records WHERE site_id = ?1 AND status = 'succeeded' AND upper(currency) = ?11 AND created_at >= ?2 AND created_at < ?3
 	AND ((?4 IS NULL AND ?5 IS NULL AND ?6 IS NULL AND ?7 IS NULL) OR visitor_id IN fv)
 )
 `;
@@ -134,7 +134,7 @@ const SQL = {
 		) a ON a.visitor_id = vv.visitor_id GROUP BY buyer`,
 	heat: `${CTE} SELECT (CAST(strftime('%w', created_at + (SELECT off FROM w), 'unixepoch') AS INTEGER) + 6) % 7 AS d, CAST(strftime('%H', created_at + (SELECT off FROM w), 'unixepoch') AS INTEGER) AS h, COUNT(*) AS s FROM pay WHERE is_renewal = 0 GROUP BY d, h`,
 	heatRefunds: `${CTE} SELECT (CAST(strftime('%w', r.refunded_at + (SELECT off FROM w), 'unixepoch') AS INTEGER) + 6) % 7 AS d, CAST(strftime('%H', r.refunded_at + (SELECT off FROM w), 'unixepoch') AS INTEGER) AS h, COUNT(*) AS s
-		FROM refunds r JOIN payments p ON p.payment_id = r.payment_id
+		FROM payment_refunds r JOIN payment_records p ON p.site_id = r.site_id AND p.gateway = r.gateway AND p.payment_id = r.payment_id
 		WHERE r.site_id = ?1 AND upper(p.currency) = ?11 AND r.refunded_at >= ?2 AND r.refunded_at < ?3 AND ((?4 IS NULL AND ?5 IS NULL AND ?6 IS NULL AND ?7 IS NULL) OR p.visitor_id IN fv) GROUP BY d, h`,
 	funnel: `${CTE} SELECT (SELECT COUNT(*) FROM fv) AS visited,
 		(SELECT COUNT(DISTINCT visitor_id) FROM ev WHERE event_type = 'pageview' AND event_name LIKE '/pricing%') AS pricing,
@@ -146,10 +146,10 @@ const SQL = {
 	timeToConvert: `${CTE} SELECT CASE WHEN time_to_convert_hours < 24 THEN 0 WHEN time_to_convert_hours < 96 THEN 1 WHEN time_to_convert_hours < 192 THEN 2 WHEN time_to_convert_hours < 744 THEN 3 ELSE 4 END AS b, COUNT(*) AS s FROM pay WHERE is_renewal = 0 GROUP BY b`,
 	// Lifetime value is all-time by design: a range would cut renewals off
 	ltv: `${CTE} SELECT first_touch_source AS k, SUM(net_amount_cents) AS net, COUNT(DISTINCT COALESCE(customer_email_hash, visitor_id, payment_id)) AS c
-		FROM payments WHERE site_id = ?1 AND status = 'succeeded' AND upper(currency) = ?11 GROUP BY first_touch_source HAVING c > 0 ORDER BY net * 1.0 / c DESC LIMIT 6`,
+		FROM payment_records WHERE site_id = ?1 AND status = 'succeeded' AND upper(currency) = ?11 GROUP BY first_touch_source HAVING c > 0 ORDER BY net * 1.0 / c DESC LIMIT 6`,
 	// Recent sales include refunded ones (labelled in the UI); revenue never does
 	sales: `${CTE} SELECT payment_id, customer_email_masked, plan_name, gross_amount_cents, fee_amount_cents, gateway, country, city, created_at, first_touch_source, last_touch_source, visitor_id, time_to_convert_hours, is_renewal, status
-		FROM payments WHERE site_id = ?1 AND status IN ('succeeded', 'refunded') AND upper(currency) = ?11 AND created_at >= ?2 AND created_at < ?3
+		FROM payment_records WHERE site_id = ?1 AND status IN ('succeeded', 'refunded') AND upper(currency) = ?11 AND created_at >= ?2 AND created_at < ?3
 		AND ((?4 IS NULL AND ?5 IS NULL AND ?6 IS NULL AND ?7 IS NULL) OR visitor_id IN fv) ORDER BY created_at DESC LIMIT 8`,
 	adSpend: `${CTE} SELECT source AS k, spend_date AS d, SUM(amount_cents) AS a FROM ad_spend WHERE site_id = ?1 AND spend_date >= date(?2 + (SELECT off FROM w), 'unixepoch') AND spend_date <= date(?3 - 1 + (SELECT off FROM w), 'unixepoch') GROUP BY source, spend_date`,
 	annotations: `${CTE} SELECT id, at, label FROM annotations WHERE site_id = ?1 AND at >= ?2 AND at < ?3 ORDER BY at`,
@@ -230,7 +230,7 @@ export async function queryDashboard(db: D1Database, siteId: string, q: Dashboar
 	const timezone = site?.timezone || 'UTC';
 	const now = q.now ?? Math.floor(Date.now() / 1000);
 	const off = tzOffsetSec(timezone, now);
-	const { results: excluded } = await db.prepare('SELECT DISTINCT upper(currency) AS currency FROM payments WHERE site_id = ? AND upper(currency) != ? ORDER BY currency').bind(siteId, currency).all<{ currency: string }>();
+	const { results: excluded } = await db.prepare('SELECT DISTINCT upper(currency) AS currency FROM payment_records WHERE site_id = ? AND upper(currency) != ? ORDER BY currency').bind(siteId, currency).all<{ currency: string }>();
 	const { n, step, start, end } = dateRangeToTimestamps(q.range, now, off, q.custom);
 	const prevStart = start - n * step;
 

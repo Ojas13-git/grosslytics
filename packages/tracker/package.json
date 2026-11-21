@@ -8,8 +8,11 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
+  "dependencies": {
+    "@grosslytics/shared": "workspace:*"
+  },
   "devDependencies": {
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.2",
     "terser": "^5.51.2",
     "typescript": "^5.7.0"
   }

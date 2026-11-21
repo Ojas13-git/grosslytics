@@ -32,7 +32,7 @@ export async function sessionAccount(c: Context<{ Bindings: Bindings }>): Promis
 	const id = getCookie(c, SESSION_COOKIE);
 	if (!id) return null;
 	return c.env.DB.prepare(
-		'SELECT a.id, a.email, a.status, a.trial_ends_at, a.current_period_end FROM account_sessions s JOIN accounts a ON a.id = s.account_id WHERE s.id_hash = ? AND s.expires_at > ?',
+		'SELECT a.id, a.email, a.status, a.trial_ends_at, a.current_period_end FROM account_sessions s JOIN accounts a ON a.id = s.account_id JOIN verified_accounts v ON v.account_id = a.id WHERE s.id_hash = ? AND s.expires_at > ?',
 	)
 		.bind(await hashToken(id), Math.floor(Date.now() / 1000))
 		.first<AccountRow>();

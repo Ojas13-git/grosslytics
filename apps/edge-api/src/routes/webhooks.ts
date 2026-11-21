@@ -1,14 +1,18 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { calculateNetRevenue, maskEmail } from '@grosslytics/shared/fees';
 import { timeToConvertHours } from '@grosslytics/shared/attribution';
+import { PAYMENT_GATEWAYS } from '@grosslytics/shared/constants';
 import { applyPaymentEvent, D1StorageAdapter } from '@grosslytics/db-d1';
 import type { PaymentGateway, PaymentRecord } from '@grosslytics/shared/types';
 import { isCloud } from '../cloud.js';
 import type { Bindings } from '../env.js';
 import { safeEqual, verifyWebhook } from '../verify.js';
 import { reportingCurrency } from '@grosslytics/shared/money';
+import { readSiteSecret } from '../site-secrets.js';
 
 export const webhooksRoute = new Hono<{ Bindings: Bindings }>();
+webhooksRoute.use('*', bodyLimit({ maxSize: 512 * 1024 }));
 
 /** Gateway-agnostic payment fields extracted from a verified webhook. */
 interface ExtractedPayment {
@@ -306,8 +310,8 @@ async function hashEmail(email: string): Promise<string> {
 // POST /api/webhooks/:gateway?siteId=...
 webhooksRoute.post('/:gateway', async (c) => {
 	const gateway = c.req.param('gateway') as PaymentGateway;
+	if (!PAYMENT_GATEWAYS.includes(gateway)) return c.text('Unknown gateway', 404);
 	const extract = EXTRACTORS[gateway];
-	if (!extract) return c.text('Unknown gateway', 404);
 
 	const siteId = c.req.query('siteId');
 	if (!siteId) return c.text('siteId required', 400);
@@ -315,15 +319,27 @@ webhooksRoute.post('/:gateway', async (c) => {
 	const site = await new D1StorageAdapter(c.env.DB).getSite(siteId);
 	if (!site) return c.text('Unknown site', 404);
 	const saved = await c.env.DB.prepare('SELECT secret FROM site_secrets WHERE site_id = ? AND gateway = ?').bind(siteId, gateway).first<{ secret: string }>();
-	// Hosted Cloud never falls back to the operator's env secrets: each customer signs with their own
-	const secret = saved?.secret || (isCloud(c.env) ? '' :
-		({
+	// Legacy environment credentials belong to one self-hosted site.
+	let secret = '';
+	if (saved) {
+		try {
+			secret = (await readSiteSecret(c.env, siteId, gateway, saved.secret)) ?? '';
+		} catch {
+			return c.text('Webhook credential unavailable', 503);
+		}
+	} else if (!isCloud(c.env)) {
+		const allowed = c.env.WEBHOOK_SITE_ID
+			? c.env.WEBHOOK_SITE_ID === siteId
+			: !(await c.env.DB.prepare('SELECT 1 FROM sites WHERE site_id != ? LIMIT 1').bind(siteId).first());
+		const legacy = {
 			stripe: c.env.STRIPE_WEBHOOK_SECRET,
 			razorpay: c.env.RAZORPAY_WEBHOOK_SECRET,
 			polar: c.env.POLAR_WEBHOOK_SECRET,
 			paddle: c.env.PADDLE_WEBHOOK_SECRET,
 			lemonsqueezy: c.env.LEMONSQUEEZY_WEBHOOK_SECRET,
-		} as Partial<Record<PaymentGateway, string>>)[gateway]) || '';
+		} satisfies Partial<Record<PaymentGateway, string | undefined>>;
+		if (allowed && Object.hasOwn(legacy, gateway)) secret = legacy[gateway as keyof typeof legacy] ?? '';
+	}
 
 	// Fail closed: unsigned or unconfigured webhooks are never trusted.
 	// Gumroad pings carry no signature, so its secret is a key in the ping URL instead.

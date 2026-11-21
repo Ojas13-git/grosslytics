@@ -3,7 +3,7 @@ import Page from '../layouts/Page.astro';
 
 // Keep in step with the code: tracker (packages/tracker/src/g.ts, c.ts), waitlist (apps/edge-api/src/routes/waitlist.ts),
 // accounts (apps/edge-api/src/routes/auth.ts) and webhooks. Change this page when what is collected changes.
-const UPDATED = '7 November 2026';
+const UPDATED = '17 November 2026';
 const CONTACT = 'support@grosslytics.com';
 const h2 = 'mt-12 text-[22px] font-semibold tracking-[-0.02em] text-ink';
 ---
@@ -23,14 +23,15 @@ const h2 = 'mt-12 text-[22px] font-semibold tracking-[-0.02em] text-ink';
 			<h2 class={h2}>What we collect on grosslytics.com</h2>
 			<ul class="mt-4 list-disc space-y-2 pl-6">
 				<li><strong class="text-ink">Waitlist:</strong> your email address and the plan you chose, so we can write to you once when it opens. We do not send newsletters or share the list.</li>
-				<li><strong class="text-ink">Accounts (Hosted Cloud, when open):</strong> your email address and a salted hash of your password; never the password itself. Billing is handled by Stripe, which receives your payment details directly; we only store Stripe’s customer and subscription IDs.</li>
-				<li><strong class="text-ink">Lifetime licenses:</strong> the purchase’s Stripe checkout ID and email, and a hash of your license key.</li>
+				<li><strong class="text-ink">Accounts (Hosted Cloud, when open):</strong> your email address and a salted hash of your password. Your payment provider receives payment details directly, and we store its customer and subscription IDs.</li>
+				<li><strong class="text-ink">Lifetime licenses:</strong> the purchase’s checkout or payment ID, email, and a hash of your license key.</li>
+				<li><strong class="text-ink">Verification emails:</strong> a short-lived code sent through Plunk to verify your account email or recover a purchased license. Only a hash of the code is stored in our database, and codes expire after 15 minutes.</li>
 				<li><strong class="text-ink">Our own analytics:</strong> grosslytics.com uses Grosslytics itself, described below.</li>
 			</ul>
 
 			<h2 class={h2}>What the analytics collects</h2>
 			<ul class="mt-4 list-disc space-y-2 pl-6">
-				<li>Pages viewed, the referring site or campaign tag, reading time and scroll depth, goals the site defines, and (only on pages with the optional click script) which element was clicked. Typed text is never recorded.</li>
+				<li>Page paths, the referring hostname or campaign tag, reading time and scroll depth, goals the site defines, and (only on pages with the optional click script) which element was clicked. Query strings and fragments are stripped from paths, and common reset links, email addresses, and long identifier segments are redacted. Site owners should avoid sending sensitive data in goals, campaign tags, and custom metadata.</li>
 				<li>Country and city, derived by Cloudflare from the connection. IP addresses are not stored.</li>
 				<li>Device type, operating system and browser, from the browser’s user agent.</li>
 				<li>A random visitor ID in the browser’s local storage and a session ID in session storage. No cookies are set.</li>
@@ -48,7 +49,7 @@ const h2 = 'mt-12 text-[22px] font-semibold tracking-[-0.02em] text-ink';
 			<p>You can ask us to see, correct or delete the data we hold about you by writing to <a class="text-accent hover:underline" href={`mailto:${CONTACT}`}>{CONTACT}</a>. We answer within 30 days. Depending on where you live, you may also complain to your data protection authority.</p>
 
 			<h2 class={h2}>Who else receives data</h2>
-			<p>Cloudflare (hosting) and Stripe (payments). We do not sell data or use it for advertising.</p>
+			<p>Cloudflare provides hosting. Dodo Payments or Stripe process purchases, and Plunk delivers verification emails when configured. We do not sell data or use it for advertising.</p>
 
 			<h2 class={h2}>Changes</h2>
 			<p>If this policy changes, the date at the top changes. Material changes will be announced on this page.</p>

@@ -59,8 +59,8 @@ const brotliBytes = brotliCompressSync(code, {
 console.log(`Tracker raw: ${(rawBytes / 1024).toFixed(2)} KB (${rawBytes} bytes)`);
 console.log(`Tracker Brotli: ${(brotliBytes / 1024).toFixed(2)} KB (${brotliBytes} bytes)`);
 
-// The site says "1.5 KB": 1,587 bytes is the most that still rounds to 1.5 KB (1,024-byte KB)
-const MAX_BROTLI_BYTES = 1587;
+// Keep the published tracker size at 1.8 KB Brotli.
+const MAX_BROTLI_BYTES = 1894;
 if (brotliBytes > MAX_BROTLI_BYTES) {
 	console.error(`❌ Tracker exceeds ${MAX_BROTLI_BYTES} bytes limit: ${brotliBytes} bytes`);
 	process.exit(1);

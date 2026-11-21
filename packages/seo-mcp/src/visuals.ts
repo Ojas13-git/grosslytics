@@ -38,23 +38,25 @@ export function planArticleVisuals(
 	const recommended =
 		productPages.length > 0 ||
 		['comparison', 'listicle'].includes(format) ||
-		/\b(dashboard|interface|setup|install|walkthrough)\b/i.test(keyword);
+		/\b(dashboard|interface|setup|install|walkthrough|macos|desktop app|stream[- ]cop(?:y|ying))\b/i.test(
+			keyword,
+		);
 	return {
 		recommendation: recommended ? 'assess-real-screenshots' : 'optional',
 		reason: recommended
-			? 'Public UI, demo or pricing screenshots can help readers evaluate the products or follow a workflow. Choose only views that explain an article section.'
+			? 'Public web views or genuine native app screenshots can help readers evaluate products or follow a workflow. Choose views that explain a section.'
 			: 'Screenshots may add little to conceptual, code-only or calculation-based articles. Record a reason if none are useful.',
 		captureCandidates: productPages,
 		workflow: [
-			'Inspect the product homepage and its publicly linked demo using the connected browser; choose a useful view, not a decorative image quota. Capture our product on the same basis as competitors.',
-			'Wait for actual content to load, dismiss optional overlays and inspect the screenshot. Do not capture spinners, error pages, private customer data or account screens. Do not bypass logins or challenges.',
-			'Take a real browser screenshot and save it locally. Do not use generated dashboards, downloaded marketing images or reconstructed interfaces as screenshot evidence. Keep demo/sample labels and relevant context.',
-			'Call register_article_screenshot with the captured file, actual source URL, capture date, descriptive alt text and a factual caption. Reuse its figureMarkdown in the relevant section.',
+			'For web products, inspect the public page or demo in a connected browser. Capture comparable views for the publisher and its competitors. Use the loaded view and skip login challenges, account screens and private customer data.',
+			'For native workflows, capture the running app under the actual conditions described. Annotate relevant controls or observations in the genuine capture. On macOS, Activity Monitor can show observed CPU and memory use, and Finder Get Info can show file metadata. Use measured results and stream verification for performance and quality claims.',
+			'Save the genuine screenshot locally and inspect it before import. Preserve relevant context and demo/sample labels, and redact private data. Avoid generated, reconstructed or downloaded marketing images as screenshot evidence.',
+			'Call register_article_screenshot with the capture date, descriptive alt text, factual caption and source URL. For native captures use pageType native-app and link to a public product or documentation page as a reference. Embed the figureMarkdown beside the explanation.',
 			'Use visualReview to explain the chosen coverage. If screenshots do not help, use not-needed; if capture is blocked, use unavailable and state the blocker. Do not fabricate a replacement.',
 			'Run outrank_3pass_audit with visualReview, then publish with the same assessment. Verify the built page and image loading before reporting completion.',
 		],
 		limitations:
-			'This MCP does not control a browser. The connected agent performs capture. Import validation checks files and provenance records, not independent proof of screenshot authenticity, product performance, human authorship or SEO gains.',
+			'This MCP does not control a browser or desktop app. The caller performs capture. Import validation checks files and provenance records, not independent proof of screenshot authenticity, product performance, human authorship or SEO gains.',
 	};
 }
 
@@ -89,7 +91,7 @@ export function imageInfo(bytes: Buffer) {
 			offset += size;
 		}
 	}
-	throw new Error('Expected a browser-captured PNG or JPEG with readable dimensions.');
+	throw new Error('Expected a PNG or JPEG screenshot with readable dimensions.');
 }
 
 export const screenshotSchema = {
@@ -98,18 +100,20 @@ export const screenshotSchema = {
 		.string()
 		.min(1)
 		.describe(
-			'Absolute local path to a genuine browser-captured PNG or JPEG; not an image URL or generated asset.',
+			'Absolute local path to a genuine PNG or JPEG captured from a browser or native app.',
 		),
-	sourceUrl: publicPageUrl,
+	sourceUrl: publicPageUrl.describe(
+		'Captured web page or official public product/docs reference for a native app.',
+	),
 	capturedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-	pageType: z.enum(['homepage', 'public-demo', 'pricing', 'documentation']),
+	pageType: z.enum(['homepage', 'public-demo', 'pricing', 'documentation', 'native-app']),
 	alt: z.string().min(15).max(300),
 	caption: z
 		.string()
 		.min(20)
 		.max(500)
 		.describe(
-			'Describe the visible interface and identify sample/demo data where present. Do not infer performance from demo figures.',
+			'Describe what is visible and identify sample/demo data where present. State the conditions for any resource readings.',
 		),
 };
 
@@ -154,13 +158,14 @@ export async function registerScreenshot(
 	const directory = path.join(webDir, 'public', imageDir);
 	await fs.mkdir(directory, { recursive: true });
 	const { screenshotFile: _sourceFile, ...provenance } = input;
+	const nativeCapture = input.pageType === 'native-app';
 	const record = {
 		...provenance,
 		file,
 		width: info.width,
 		height: info.height,
 		sha256,
-		captureMethod: 'browser-screenshot',
+		captureMethod: nativeCapture ? 'native-app-screenshot' : 'browser-screenshot',
 	};
 	// Identical captures are reused; neither images nor provenance can overwrite earlier work.
 	for (const [target, content] of [
@@ -175,14 +180,16 @@ export async function registerScreenshot(
 				throw new Error(`Existing screenshot or provenance differs: ${path.basename(target)}`);
 		}
 	}
-	const figureMarkdown = `<figure>\n  <a href="${src}" aria-label="Open full-size ${escapeHtml(input.product)} screenshot">\n    <img src="${src}" alt="${escapeHtml(input.alt)}" width="${info.width}" height="${info.height}" loading="lazy" decoding="async" />\n  </a>\n  <figcaption>${escapeHtml(input.caption)} Captured ${input.capturedOn}. <a href="${escapeHtml(input.sourceUrl)}">Source: ${escapeHtml(input.product)}</a>. Demo figures are not performance benchmarks.</figcaption>\n</figure>`;
+	const sourceLabel = nativeCapture ? 'Product reference' : 'Source';
+	const demoNote = nativeCapture ? '' : ' Demo figures are not performance benchmarks.';
+	const figureMarkdown = `<figure>\n  <a href="${src}" aria-label="Open full-size ${escapeHtml(input.product)} screenshot">\n    <img src="${src}" alt="${escapeHtml(input.alt)}" width="${info.width}" height="${info.height}" loading="lazy" decoding="async" />\n  </a>\n  <figcaption>${escapeHtml(input.caption)} Captured ${input.capturedOn}. <a href="${escapeHtml(input.sourceUrl)}">${sourceLabel}: ${escapeHtml(input.product)}</a>.${demoNote}</figcaption>\n</figure>`;
 	return {
 		status: 'registered',
 		src,
 		provenance: record,
 		figureMarkdown,
 		verification:
-			'File format, dimensions and recorded hash checked. The caller is responsible for genuine browser capture and truthful source/sample labels.',
+			'File format, dimensions and recorded hash checked. The caller is responsible for genuine capture and truthful source/sample labels.',
 	};
 }
 
@@ -273,7 +280,7 @@ export async function auditVisuals(
 	}
 	if (review?.decision === 'include-screenshots' && registeredScreenshots === 0)
 		issues.push(
-			'Visual review requests screenshots, but none have valid local provenance. Capture with the connected browser, register and embed them.',
+			'Visual review requests screenshots, but none have valid local provenance. Capture the relevant web or native app view, then register and embed it.',
 		);
 	if (review && review.decision !== 'include-screenshots' && images.length > 0)
 		issues.push(
@@ -281,7 +288,7 @@ export async function auditVisuals(
 		);
 	if (!review && recommended && registeredScreenshots === 0)
 		issues.push(
-			'Product comparisons need a visual assessment. Use real public screenshots where useful, or supply visualReview with a specific not-needed/unavailable reason.',
+			'Product comparisons need a visual assessment. Use real screenshots where useful, or supply visualReview with a specific not-needed/unavailable reason.',
 		);
 	return {
 		issues,

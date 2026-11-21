@@ -95,7 +95,15 @@ export async function articleInventory(webDir: string) {
 
 export async function planInternalLinks(webDir: string, keyword: string, articlePath?: string) {
 	const terms = new Set(keyword.toLowerCase().match(/[a-z0-9]+/g) ?? []);
-	const pages = (await articleInventory(webDir)).filter(
+	const inventoryPath = process.env.SEO_LINK_INVENTORY;
+	const inventory = inventoryPath
+		? await fs.readFile(path.resolve(webDir, inventoryPath), 'utf8')
+		: null;
+	const inventoryPages = inventory === null ? await articleInventory(webDir) :
+		[...inventory.matchAll(/\[([^\]]+)\]\((\/[a-z0-9/-]*)\)/g)].map((match) => ({
+			url: match[2] ?? '', title: match[1] ?? '', description: '', primaryKeyword: '',
+		}));
+	const pages = inventoryPages.filter(
 		(p) => p.url.replace(/\/$/, '') !== articlePath?.replace(/\/$/, ''),
 	);
 	const ranked = pages
@@ -111,9 +119,10 @@ export async function planInternalLinks(webDir: string, keyword: string, article
 		.slice(0, 8);
 	return {
 		candidates: ranked,
-		note: 'These are lexical suggestions from existing local articles, not a required count, SEO score or automatic relevance decision. Choose only links useful in context; the suggested natural anchor is the actual page title.',
+		inventory: inventoryPath ?? 'local content collections',
+		note: 'These are lexical suggestions, not an automatic relevance decision, SEO score or required link count. Review existing contextual and related links before adding anything; choose only a small number of genuinely useful destinations, with concise natural anchor text. Do not add reciprocal links just to meet a target or put every article in the sitewide footer.',
 		incomingLinkAction:
-			'Ensure another relevant page or a browseable collection index links to the new article. Do not automatically insert reciprocal links or repeat exact-match keywords.',
+			'Ensure every important article, guide and comparison has a crawlable incoming link from a relevant page or browseable collection index. Check reachability after removing footer links. Do not automatically insert reciprocal links or repeat exact-match keywords.',
 		source: `${googleDocs}crawling-indexing/links-crawlable`,
 	};
 }

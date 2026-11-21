@@ -105,7 +105,13 @@ program
 		writeFileSync(join(api, 'wrangler.toml'), apiToml({ host, zone, releasesBucket: prev.releasesBucket, requireFooter: !!bundle && host !== 'grosslytics.com' }, dbId));
 		writeFileSync(join(web, 'wrangler.toml'), webToml({ host }));
 		noindex(host, join(web, 'dist'));
-		await step('Deploying the API', () => wrangler(['deploy'], { cwd: api, quiet: true }));
+		await step('Deploying the API', () => wrangler(['deploy', '--keep-vars'], { cwd: api, quiet: true }));
+		await step('Configuring webhook credential encryption', () => {
+			const secrets = JSON.parse(wrangler(['secret', 'list', '--format', 'json'], { cwd: api, quiet: true })) as { name: string }[];
+			if (!secrets.some((entry) => entry.name === 'SITE_SECRETS_KEY')) {
+				wrangler(['secret', 'put', 'SITE_SECRETS_KEY'], { cwd: api, input: randomBytes(32).toString('hex'), quiet: true });
+			}
+		});
 		await step('Deploying the dashboard', () => wrangler(['deploy'], { cwd: web, quiet: true }));
 
 		let apiToken = '';

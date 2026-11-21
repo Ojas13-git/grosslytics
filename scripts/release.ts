@@ -24,8 +24,17 @@ mkdirSync(`${OUT}/bundle/web`, { recursive: true });
 
 // Buyers' sites must not carry the operator's checkout links or API URL
 const cleanEnv = process.argv.includes('--keep-env') ? process.env : Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('PUBLIC_')));
+run('bun', ['run', '--cwd', 'packages/tracker', 'build']);
+cpSync('packages/tracker/dist/g.js', 'apps/web/public/g.js');
+cpSync('packages/tracker/dist/c.js', 'apps/web/public/c.js');
 run('bun', ['run', '--cwd', 'apps/web', 'build'], cleanEnv);
-cpSync('apps/web/dist', `${OUT}/bundle/web/dist`, { recursive: true });
+const webDist = `${OUT}/bundle/web/dist`;
+cpSync('apps/web/dist/client', webDist, { recursive: true });
+cpSync('apps/web/dist/server', `${webDist}/_worker.js`, {
+	recursive: true,
+	filter: (path) => !path.endsWith('.map') && !path.endsWith('/wrangler.json'),
+});
+writeFileSync(`${webDist}/_worker.js/index.js`, "export { default } from './entry.mjs';\n");
 run('bunx', ['wrangler', 'deploy', '--dry-run', '--outdir', `${OUT}/bundle/api`]);
 rmSync(`${OUT}/bundle/api/index.js.map`, { force: true });
 rmSync(`${OUT}/bundle/api/README.md`, { force: true });

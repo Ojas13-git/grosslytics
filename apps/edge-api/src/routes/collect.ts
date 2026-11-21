@@ -1,28 +1,17 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import * as v from 'valibot';
 import { BeaconSchema } from '@grosslytics/shared/schemas';
 import { AI_CRAWLER_AGENTS } from '@grosslytics/shared/constants';
-import { getDailySaltKey } from '@grosslytics/shared/attribution';
+import { analyticsPath, referrerHost } from '@grosslytics/shared/privacy';
 import type { DeviceType, EnrichedEvent } from '@grosslytics/shared/types';
 import type { Bindings } from '../env.js';
 import { accountActive, CLOUD_EVENT_CAP, isCloud, usageMonth } from '../cloud.js';
+import { hashToken } from '../auth.js';
+import { clientKey, limited } from '../limits.js';
 
-export const collectRoute = new Hono<{ Bindings: Bindings }>();
-
-// Privacy-preserving hash helper using SubtleCrypto
-async function computeCookielessVisitorId(
-	siteId: string,
-	ip: string,
-	ua: string,
-	salt: string,
-): Promise<string> {
-	const raw = `${siteId}|${ip}|${ua}|${salt}`;
-	const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-	const hex = Array.from(new Uint8Array(buf))
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('');
-	return hex.slice(0, 16);
-}
+type CollectorCf = { asn?: number; verifiedBotCategory?: string; country?: string; city?: string; colo?: string; asOrganization?: string };
+export const collectRoute = new Hono<{ Bindings: Bindings; Variables: { collectorCf: CollectorCf } }>();
 
 export function parseDevice(ua: string): { deviceType: DeviceType; os: string; browser: string } {
 	let deviceType: DeviceType = 'desktop';
@@ -58,15 +47,17 @@ export function isBotRequest(ua: string, cf: { asn?: number; verifiedBotCategory
 }
 
 // The site ID is public (it sits in page source), so events are only accepted from the site's own domain, its subdomains, or local dev.
-export function originAllowed(origin: string, domain: string): boolean {
-	if (!origin) return true; // server-side senders have no Origin; browsers always send one on cross-origin POST
+export function originAllowed(origin: string, domain: string, allowLocal = true): boolean {
+	if (!origin) return allowLocal;
 	let host: string;
 	try {
-		host = new URL(origin).hostname.toLowerCase();
+		const url = new URL(origin);
+		if (url.protocol !== 'https:' && (url.protocol !== 'http:' || !allowLocal)) return false;
+		host = url.hostname.toLowerCase();
 	} catch {
 		return false;
 	}
-	if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.localhost')) return true;
+	if (allowLocal && (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.localhost'))) return true;
 	const site = domain.toLowerCase().replace(/^www\./, '');
 	return host === site || host.endsWith(`.${site}`);
 }
@@ -107,35 +98,48 @@ const crawlerOf = (ua: string) => AI_CRAWLER_AGENTS.find((agent) => ua.includes(
 export function recordCrawl(db: D1Database, siteId: string, bot: string, path: string) {
 	return db
 		.prepare("INSERT INTO ai_crawls (site_id, day, bot, path, hits) VALUES (?, date('now'), ?, ?, 1) ON CONFLICT (site_id, day, bot, path) DO UPDATE SET hits = hits + 1")
-		.bind(siteId, bot, path.split(/[?#]/)[0]!.slice(0, 300) || '/')
+		.bind(siteId, bot, analyticsPath(path).slice(0, 300))
 		.run();
 }
 
 /**
  * POST /api/crawl {sid, path, ua}: the owner's server reports an AI crawler's page request.
  * Crawlers don't run JavaScript, so g.js never sees them; a few lines of middleware on the site do (see /docs).
- * Like page views, these counts are unauthenticated: anyone who knows the site ID could inflate them.
+ * The server authorizes the report with a site-specific crawler key.
  */
 export const crawlRoute = new Hono<{ Bindings: Bindings }>();
+collectRoute.use('*', async (c, next) => {
+	c.set('collectorCf', (c.req.raw.cf ?? {}) as CollectorCf);
+	await next();
+}, bodyLimit({ maxSize: MAX_BODY_BYTES }));
+crawlRoute.use('*', bodyLimit({ maxSize: MAX_BODY_BYTES }));
 const CrawlBody = v.object({
 	sid: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 	path: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
 	ua: v.pipe(v.string(), v.maxLength(1024)),
 });
 crawlRoute.post('/', async (c) => {
+	if (c.env.ENVIRONMENT === 'production' && (!c.env.INGEST_SITE_LIMITER || !c.env.INGEST_SOURCE_LIMITER)) return c.text('Crawler rate limiting is not configured', 503);
+	if (await limited(c.env.INGEST_SOURCE_LIMITER, `crawl:${clientKey(c.req.raw)}`)) return c.text('Rate limited', 429);
+	const key = c.req.header('authorization')?.match(/^Bearer (gl_crawl_[a-f0-9]{40})$/i)?.[1];
+	if (!key) return c.text('Crawler key required', 401);
 	const parsed = v.safeParse(CrawlBody, await c.req.json().catch(() => null));
 	if (!parsed.success) return c.text('Bad Request', 400);
+	const registered = await c.env.DB.prepare('SELECT 1 FROM site_crawl_keys WHERE site_id = ? AND key_hash = ?').bind(parsed.output.sid, await hashToken(key)).first();
+	if (!registered) return c.text('Invalid crawler key', 401);
 	const bot = crawlerOf(parsed.output.ua);
 	if (!bot) return c.text('Accepted', 202); // not an AI crawler: nothing to count
 	const { domain, open } = await siteGate(c.env, parsed.output.sid);
 	if (!domain) return c.text('Unknown site', 404);
-	if (open) c.executionCtx.waitUntil(recordCrawl(c.env.DB, parsed.output.sid, bot, parsed.output.path).then(() => {}, () => {}));
+	if (open && !(await limited(c.env.INGEST_SITE_LIMITER, `crawl:${parsed.output.sid}`))) c.executionCtx.waitUntil(recordCrawl(c.env.DB, parsed.output.sid, bot, parsed.output.path).then(() => {}, () => {}));
 	return c.text('Accepted', 202);
 });
 
 collectRoute.post('/', async (c) => {
 	const startTime = Date.now();
 	let rawBody: unknown;
+	if (c.env.ENVIRONMENT === 'production' && (!c.env.INGEST_SITE_LIMITER || !c.env.INGEST_SOURCE_LIMITER)) return c.text('Ingestion rate limiting is not configured', 503);
+	if (await limited(c.env.INGEST_SOURCE_LIMITER, clientKey(c.req.raw))) return c.text('Rate limited', 429);
 
 	const text = await c.req.text().catch(() => '');
 	if (!text || text.length > MAX_BODY_BYTES) return c.text('Bad Request', 400);
@@ -153,32 +157,25 @@ collectRoute.post('/', async (c) => {
 	const beacon = parsed.output;
 	const req = c.req.raw;
 	const ua = req.headers.get('user-agent') || '';
-	const clientIp = req.headers.get('cf-connecting-ip') || '127.0.0.1';
 
-	const cf = (req as any).cf || {};
+	const cf = c.get('collectorCf') || {};
 	const accepted = () => c.text('Accepted', 202, { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
 
-	// 1. AI crawlers that do run JavaScript are counted as crawls, never as visitors; every other bot is dropped so counts stay human
+	// Crawler counts come from the authenticated server integration.
 	const eventType = beacon.t;
-	const bot = crawlerOf(ua);
-	if (!bot && isBotRequest(ua, cf)) return accepted();
+	if (eventType === 'ai_crawl' || crawlerOf(ua) || isBotRequest(ua, cf)) return accepted();
 
 	const { domain, open } = await siteGate(c.env, beacon.sid);
 	if (!domain) return c.text('Unknown site', 404);
-	if (!originAllowed(req.headers.get('origin') || '', domain)) return c.text('Forbidden', 403);
+	const local = c.env.ENVIRONMENT !== 'production' || ['localhost', '127.0.0.1'].includes(new URL(req.url).hostname);
+	if (!originAllowed(req.headers.get('origin') || '', domain, local)) return c.text('Forbidden', 403);
 	// Trial over or plan cap reached: the visitor's page must not notice, so this answers like a recorded event
 	if (!open) return accepted();
-	if (bot) {
-		if (eventType === 'pageview') c.executionCtx.waitUntil(recordCrawl(c.env.DB, beacon.sid, bot, beacon.n).then(() => {}, () => {}));
-		return accepted();
-	}
+	if (await limited(c.env.INGEST_SITE_LIMITER, beacon.sid)) return accepted();
 
-	// 2. Privacy-preserving visitor ID fallback if vid missing or empty
-	let vid = beacon.vid;
-	if (!vid) {
-		const salt = getDailySaltKey();
-		vid = await computeCookielessVisitorId(beacon.sid, clientIp, ua, salt);
-	}
+	const vid = beacon.vid;
+	const path = beacon.t === 'goal' ? beacon.n : analyticsPath(beacon.n);
+	const ref = referrerHost(beacon.ref) || (/^[a-z0-9.-]+$/i.test(beacon.ref) ? beacon.ref : '');
 
 	// 3. Extract Cloudflare Edge Geolocation
 	const country = (cf.country as string) || 'XX';
@@ -190,6 +187,8 @@ collectRoute.post('/', async (c) => {
 
 	const enriched: EnrichedEvent = {
 		...beacon,
+		n: path,
+		ref,
 		vid,
 		t: eventType,
 		country,
@@ -219,7 +218,7 @@ collectRoute.post('/', async (c) => {
 						method: 'POST',
 						body: JSON.stringify({
 							visitorId: vid,
-							page: beacon.n,
+							page: path,
 							source: beacon.src,
 							country,
 							city,

@@ -47,12 +47,26 @@ ${lines.map((t, i) => `<text x="80" y="${270 + i * 76}" fill="#1d1d1f" ${FONT} f
 export default defineConfig({
 	site: 'https://grosslytics.com',
 	output: 'static',
+	session: false,
+	markdown: { syntaxHighlight: false },
 	adapter: cloudflare({
-		imageService: 'cloudflare',
-		platformProxy: {
-			enabled: true,
-		},
+		imageService: 'passthrough',
+		prerenderEnvironment: 'node',
 	}),
+	security: {
+		csp: {
+			directives: [
+				"default-src 'self'",
+				"base-uri 'self'",
+				"object-src 'none'",
+				"form-action 'self'",
+				"img-src 'self' data: https:",
+				"connect-src 'self' https: wss:",
+			],
+			scriptDirective: { resources: ["'self'"], strictDynamic: false },
+			styleDirective: { resources: [{ resource: "'self'", kind: 'element' }, { resource: "'unsafe-inline'", kind: 'attribute' }] },
+		},
+	},
 	integrations: [
 		react(),
 		sitemap({

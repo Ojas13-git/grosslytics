@@ -1,3 +1,5 @@
+import { analyticsPath, referrerHost } from '@grosslytics/shared/privacy';
+
 const w = window as any;
 const d = document;
 const n = navigator;
@@ -12,7 +14,7 @@ if (!w.__gl && !n.webdriver) {
 
 	if (sid) {
 		const api = s?.getAttribute('data-api') || (s?.src ? new URL(s.src).origin : '') + '/api/event';
-		const id = () => Math.random().toString(36).slice(2) + (+new Date).toString(36);
+		const id = () => crypto.getRandomValues(new Uint32Array(4)).join('-');
 		const get = (k: string, isSes?: boolean) => {
 			const st = isSes ? sessionStorage : localStorage;
 			try {
@@ -26,6 +28,7 @@ if (!w.__gl && !n.webdriver) {
 		const ses = get('gl_ses', true);
 		const ua = n.userAgent || '';
 		const ref = d.referrer || '';
+		const refHost = referrerHost(ref);
 		let pth = l.pathname;
 		const own = (ref + '/').startsWith(l.origin + '/');
 		const sp = new URLSearchParams(l.search);
@@ -42,13 +45,9 @@ if (!w.__gl && !n.webdriver) {
 			src = k[0] === 'i' ? 'instagram' + C : k[0] === 'f' ? 'facebook' + C : k[0] === 'l' ? 'linkedin' + C : k[0] === 'b' || k[0] === 'm' ? 'tiktok' + C : k[1] === 'e' ? 'telegram.org (in-app)' : 'x' + C;
 		} else if (tag) {
 			src = tag.slice(0, 50);
-		} else if (ref) {
-			try {
-				const h = new URL(ref).hostname.replace(/^www\./, '');
-				src = h + (/chatgpt|perplexity|claude|gemini|copilot/i.test(h) ? ' (AI)' : '');
-			} catch {
-				src = ref.slice(0, 50);
-			}
+		} else if (refHost) {
+			const h = refHost.replace(/^www\./, '');
+			src = h + (/chatgpt|perplexity|claude|gemini|copilot/i.test(h) ? ' (AI)' : '');
 		} else {
 			src = 'Direct (' + (pth !== '/' || l.search ? 'Shared Link' : 'Typed/Bookmark') + ')';
 		}
@@ -95,14 +94,14 @@ if (!w.__gl && !n.webdriver) {
 		const send = (t: string, nme: string, dur = 0, meta?: string) => {
 			const body = JSON.stringify({
 				sid, vid, ses, t,
-				n: nme.slice(0, 100),
+				n: (t === 'goal' ? nme : analyticsPath(nme)).slice(0, 100),
 				src,
-				ref: ref.slice(0, 100),
+				ref: refHost.slice(0, 100),
 				sd, dur,
 				us, um, uc, meta,
 			});
 			// fetch, not sendBeacon: EasyPrivacy blocks every third-party beacon (`*$ping,third-party`); keepalive still delivers on page close
-			fetch(api, { method: 'POST', body, keepalive: true, mode: 'no-cors' }).catch(() => {});
+			fetch(api, { method: 'POST', body, keepalive: true, mode: 'no-cors', referrerPolicy: 'strict-origin' }).catch(() => {});
 		};
 
 		// Hiding the tab and closing it both fire; each leave reports only the new reading time, and empty repeats are dropped
@@ -116,13 +115,14 @@ if (!w.__gl && !n.webdriver) {
 			const h = a.href;
 			if (h && h[0] !== '#' && !h.startsWith('jav')) try {
 				const u = new URL(h);
+			if (u.protocol !== 'https:') return;
 				const s = u.hostname;
 				const V = 'visitor_id';
-				const p = s.includes('stripe') ? 'client_reference_id' :
-					s.includes('polar') ? 'reference_id' :
-					s.includes('dodo') ? 'metadata_' + V :
-					s.includes('lemons') ? `checkout[custom][${V}]` :
-					s.includes('gum') ? V : 0;
+			const p = /^(buy|checkout)\.stripe\.com$/.test(s) ? 'client_reference_id' :
+				/^(buy\.)?polar\.sh$/.test(s) ? 'reference_id' :
+				s === 'checkout.dodopayments.com' ? 'metadata_' + V :
+				s.endsWith('.lemonsqueezy.com') ? `checkout[custom][${V}]` :
+				(s === 'gumroad.com' || s.endsWith('.gumroad.com')) ? V : 0;
 				if (p && !u.searchParams.has(p)) {
 					u.searchParams.set(p, vid);
 					a.href = u.href;

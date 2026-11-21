@@ -17,9 +17,9 @@ Both must sit on **one domain**. The tracker sends beacons to `<origin of g.js>/
 bun run setup
 ```
 
-Needs Bun and Node.js 18+ (the installer prompts run on Node; Bun 1.4 drops typed input). One command does steps 2 to 10 below. It builds the code, signs in to Cloudflare (click **Allow**), creates the D1 database and both queues, runs every migration, deploys the API (`<host>/api/*`) and the website (custom domain `<host>`), and sets a random `API_TOKEN` plus your dashboard password. It prints the dashboard address and the `API_TOKEN` once, so save the token.
+Needs Bun and Node.js 22.23.4+ (the installer prompts run on Node; Bun 1.4 drops typed input). One command does steps 2 to 10 below. It builds the code, signs in to Cloudflare (click **Allow**), creates the D1 database and both queues, runs every migration, deploys the API (`<host>/api/*`) and the website (custom domain `<host>`), and sets a random `API_TOKEN` plus your dashboard password. It prints the dashboard address and the `API_TOKEN` once, so save the token.
 
-This free setup sets `REQUIRE_FOOTER = "1"` on the API: a site's dashboard, settings, MCP and public page stay locked until its home page has `<a href="https://grosslytics.com">Powered by Grosslytics</a>` (no `rel="nofollow"`), found by the Verify button on `/app` and rechecked daily. Tracking is never paused by it. Lifetime installs (`npx grosslytics install`) and grosslytics.com itself don't set the variable.
+This free setup sets `REQUIRE_FOOTER = "1"` on the API. Add `<a href="https://grosslytics.com" rel="sponsored">Powered by Grosslytics</a>` to the homepage footer of the tracked site. You can also use `rel="nofollow"`. Use Verify on `/app` to unlock the dashboard, settings, MCP and public page. The link is checked daily. Tracking continues while access is locked. Lifetime installs (`npx grosslytics install`) and grosslytics.com itself don't set the variable.
 
 Before the first run:
 - **New Cloudflare account:** open Workers & Pages in the dashboard once, so Cloudflare creates your workers.dev subdomain. Deploys are refused without it.
@@ -196,7 +196,9 @@ bunx wrangler secret put PADDLE_WEBHOOK_SECRET
 bunx wrangler secret put LEMONSQUEEZY_WEBHOOK_SECRET
 ```
 
-You get each value in step 11, when you create the webhook in that gateway's dashboard. Run the matching command then. For multiple sites, you can instead store a site's own secret in its `sites` row (`stripe_webhook_secret`, `razorpay_webhook_secret`, `polar_webhook_secret`, `paddle_webhook_secret`). A site's own secret is used before the env var.
+You get each value in step 11, when you create the webhook in that gateway's dashboard. For multiple sites, configure a separate webhook endpoint and signing secret for each site under Settings → Payment webhooks. Legacy environment secrets apply to the only site in a single-site install. With multiple sites, set `WEBHOOK_SITE_ID` to the intended site before using environment secrets.
+
+Per-site credentials use AES-GCM encryption with a separate Worker secret. The installer creates the key and preserves it on updates. For manual deployments, generate a 32-byte hex key with `openssl rand -hex 32`, store it securely, and enter it through `bunx wrangler secret put SITE_SECRETS_KEY`. Preserve this key for the lifetime of the stored credentials. Existing plaintext values are encrypted when used and in nightly batches.
 
 ## 9. Route `/api/*` to the edge API
 
@@ -327,7 +329,11 @@ This is only for you, the operator selling the hosted plan. Self-hosters skip it
 4. In Dodo, go to Developer → Webhooks and add `https://yourdomain.com/api/billing/dodo` with the events `payment.succeeded`, `subscription.active`, `subscription.renewed`, `subscription.on_hold`, `subscription.cancelled`, `subscription.failed` and `subscription.expired`. Then run `bunx wrangler secret put DODO_BILLING_WEBHOOK_SECRET` with its signing secret (`whsec_…`). Stripe still works instead: a webhook to `/api/billing/stripe` (`checkout.session.completed`, `customer.subscription.updated`, `.deleted`) with `STRIPE_BILLING_WEBHOOK_SECRET`, and a Payment Link the dashboard opens with `client_reference_id`.
 5. Customers connect their own payment providers on `/app` → Payments. Each site stores its own webhook signing secret. On Cloud, your `STRIPE_WEBHOOK_SECRET` and the other env secrets are never used for customer sites.
 
-Not built yet for Cloud: password reset by email (Grosslytics sends no email), a plan above 100,000 events, and account deletion. Usage is counted per calendar month (UTC).
+Set `CLOUD_DODO_PRODUCT_ID` to the subscription product ID before accepting Dodo subscription checkouts. Stripe deployments need `CLOUD_STRIPE_PAYMENT_LINK_ID`. Subscription status is applied in provider event-time order.
+
+Configure Plunk transactional delivery with Worker secrets `PLUNK_API_KEY` and `PLUNK_FROM_EMAIL`, using a verified sender address. Grosslytics uses `support@grosslytics.com`, configured in its Worker vars. New accounts verify their email before a session is created. Existing accounts verify on their next sign-in. Public revenue pages require a DNS TXT record at `_grosslytics.<domain>` whose value is the site's ID, followed by enabling the public page in Settings.
+
+Cloud still has a 100,000-event plan, calendar-month usage in UTC, and manual account deletion and password recovery.
 
 ## Selling Lifetime licenses ($29 once)
 
@@ -343,16 +349,30 @@ This is also only for you, the operator. A buyer pays, gets a license key on `/l
    bucket_name = "grosslytics-releases"
    ```
 2. Set the key that license keys are derived from. It must never change, or old keys stop working: `openssl rand -hex 32`, then `bunx wrangler secret put LICENSE_SECRET`.
-3. In Dodo Payments (test mode first), create a $29 one-time product. Its checkout link must redirect to `https://grosslytics.com/license` (add `&redirect_url=https://grosslytics.com%2Flicense`); Dodo appends `?payment_id=…`. Build the website with `PUBLIC_CHECKOUT_LIFETIME_URL=<that link>` (Grosslytics' own link is the default). Optionally set the var `LIFETIME_PRODUCT_ID=pdt_…` so that only this product creates licenses.
-4. The Dodo webhook from the Hosted Cloud section (`/api/billing/dodo`, with `payment.succeeded`) creates licenses. Without Cloud, create that webhook with just this event and set `DODO_BILLING_WEBHOOK_SECRET`. (Stripe instead: a Payment Link redirecting to `/license?session_id={CHECKOUT_SESSION_ID}`, the `/api/billing/stripe` webhook with `checkout.session.completed`, and optionally `LIFETIME_PAYMENT_LINK_ID=plink_…`.)
-5. Publish a release, and repeat this after every change you want buyers to get:
+3. In Dodo Payments (test mode first), create a $29 one-time product. Its checkout link must redirect to `https://grosslytics.com/license` (add `&redirect_url=https://grosslytics.com%2Flicense`); Dodo appends `?payment_id=…`. Build the website with `PUBLIC_CHECKOUT_LIFETIME_URL=<that link>` (Grosslytics' own link is the default). Set `LIFETIME_PRODUCT_ID=pdt_…` to the approved product.
+4. Subscribe the Dodo billing webhook to `payment.succeeded` and `refund.succeeded`, and set `DODO_BILLING_WEBHOOK_SECRET`. Stripe deployments use a Payment Link redirecting to `/license?session_id={CHECKOUT_SESSION_ID}`, the `/api/billing/stripe` webhook with `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `charge.refunded`, and the required `LIFETIME_PAYMENT_LINK_ID=plink_…` setting.
+5. Configure `PLUNK_API_KEY` and `PLUNK_FROM_EMAIL` as described above. The buyer requests a 15-minute code delivered to the checkout email, then submits the code to reveal the license. Checkout IDs alone cannot reveal a key.
+6. Publish a release, and repeat this after every change you want buyers to get:
    ```bash
    bun scripts/release.ts --upload
    ```
    This builds the site without your `PUBLIC_*` settings, bundles the API, adds `migrate.sql`, and uploads `latest.tgz`.
-6. Publish the CLI to npm as `grosslytics` (`cd packages/cli && bun run build && npm publish`). Until then, `npx grosslytics` doesn't exist, and buyers would have to run `node packages/cli/dist/index.js install`.
+7. Publish the CLI to npm as `grosslytics` (`cd packages/cli && bun run build && npm publish`). Until then, `npx grosslytics` doesn't exist, and buyers would have to run `node packages/cli/dist/index.js install`.
 
-Limits: the installer runs on macOS and Linux (not Windows), and needs Node 18+. A refund does not revoke the key. A buyer's site also serves the Grosslytics homepage at `/`, with the dashboard at `/app`.
+The installer runs on macOS and Linux and needs Node 22.12+. Full refunds revoke future license downloads, including when the refund arrives before the successful checkout event. A buyer's site also serves the Grosslytics homepage at `/`, with the dashboard at `/app`.
+
+## Security update rollout
+
+Build and install through `bun run setup`, or run the following manual sequence.
+
+1. Back up the D1 database, then apply `bun run db:migrate:remote`. Migration 014 copies existing payment and refund records into ledgers keyed by site, gateway, and payment ID. Re-running migrations preserves new ledger changes.
+2. Retain all rate limiter bindings from the root `wrangler.toml`. The defaults are 10 login attempts per minute per source IP, 300 ingestion requests per minute per source IP, 6,000 events per minute per site, and 15 license claims per minute per source IP. Adjust these values to your traffic.
+3. Configure `SITE_SECRETS_KEY`, the applicable billing product or Payment Link IDs, and email delivery before switching traffic to the updated API.
+4. Build the release with `bun scripts/release.ts`. It includes the updated tracker, website, API, and migrations. Deploy the API and website from that bundle using the installer. Astro 7 source builds use `apps/web/dist/client` and `apps/web/dist/server`. The release builder preserves the installer's existing `dist/_worker.js/index.js` entrypoint.
+5. Generate a site-specific crawler key in Settings → API tokens, set `GROSSLYTICS_CRAWL_KEY` in the reporting server's environment, and update its crawler integration to send the bearer key.
+6. Re-enable Hosted Cloud public pages after DNS verification. Token-based remote dashboard connections keep credentials in memory for the current page. Reconnect after reloading the page.
+
+Browser tracking is a public, client-reported interface. Origin checks and rate limits reduce abuse, and signed payment webhooks remain the source of payment records.
 
 ## Not production-ready yet
 
@@ -364,4 +384,4 @@ Limits: the installer runs on macOS and Linux (not Windows), and needs Node 18+.
 - **Indie Cloud is built but not deployed or tested against real Stripe.** Billing is covered by unit tests with locally signed events. Run a Stripe test-mode subscription through it before taking real money. Lifetime licenses and `npx grosslytics install` are built, but not run against a real Cloudflare account or Stripe.
 - **The repository is private**, so the clone command on `/start` only works for you until you make it public.
 - **OG images are SVG, not PNG.**
-- **The tracker is 1.46KB Brotli**, against the spec's 1.2KB target.
+- **The tracker is about 1.8 KB Brotli**, including URL redaction and exact checkout-domain matching.

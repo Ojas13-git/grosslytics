@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight, Check, Copy, Loader2 } from 'lucide-react';
 import { apiFetch, DEFAULT_API, loadConnection, saveConnection, useLiveSocket, useRemoteDashboard, type Connection, type SiteInfo } from '../dashboard/api';
-import { Connect, FooterGate, FOOTER_SNIPPET } from '../dashboard/connect';
+import { FOOTER_SNIPPET } from '@grosslytics/shared/constants';
+import { Connect, FooterGate } from '../dashboard/connect';
 import { copyText } from '../../lib/clipboard';
 import { CHECKOUT_LIFETIME, CLOUD_PRICE } from '../../lib/checkout';
 
@@ -303,7 +304,7 @@ function SelfHost() {
 					</div>
 					{where === 'cloudflare' ? (
 						<>
-							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a>, <a className="text-accent hover:underline" href="https://nodejs.org">Node.js</a> 18 or newer, a free Cloudflare account, and a domain on that account. About five minutes.</p>
+							<p>Needs <a className="text-accent hover:underline" href="https://bun.sh">Bun</a>, <a className="text-accent hover:underline" href="https://nodejs.org">Node.js</a> 22.23.4 or newer, a free Cloudflare account, and a domain on that account. About five minutes.</p>
 							<CopyBlock label="1. Get the code" code={`git clone ${REPO}.git\ncd grosslytics && bun install`} />
 							<CopyBlock label="2. Set up and deploy" code="bun run setup" />
 							<p className="text-[13px]">It asks for a hostname (such as analytics.yourstartup.com) and a dashboard password, then opens Cloudflare: click <strong>Allow</strong>. It creates the database and queues, deploys, and prints your dashboard address and API_TOKEN. Run it again later to update.</p>
@@ -353,7 +354,7 @@ function SelfHost() {
 				</Step>
 
 				<Step n={4} title="Add the tracker to your site" status={statuses[3]!} open={isOpen(3)} onToggle={toggle(3)} summary={hasVisit && 'Visits are arriving.'}>
-					<p>Paste this into the <code className="font-mono text-[13px]">&lt;head&gt;</code> of every page. It's about 1.5 KB compressed and sets no cookies.</p>
+					<p>Paste this into the <code className="font-mono text-[13px]">&lt;head&gt;</code> of every page. It's about 1.8 KB compressed and sets no cookies.</p>
 					<CopyBlock label="HTML" code={`<script defer src="${origin}/g.js" data-site-id="${siteId}" data-api="${api}/api/event"></script>`} />
 					<p className="text-[13px]">Then open your site in a new tab. This step turns green as soon as the visit arrives.</p>
 					<p className="text-[13px]">Still waiting? If your site sends a Content-Security-Policy header, add <code className="font-mono">{api || origin}</code> to its <code className="font-mono">script-src</code> and <code className="font-mono">connect-src</code>. Otherwise the browser blocks the tracker and only says so in the console.</p>

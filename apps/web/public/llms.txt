@@ -14,7 +14,7 @@
 - Built-in MCP server for Claude Code, Cursor and Windsurf.
 
 ## Setup
-- Tracker (1.5 KB Brotli, no cookies, stores a random visitor ID in localStorage):
+- Tracker (1.8 KB Brotli, no cookies, stores a random visitor ID in localStorage):
   `<script defer src="https://grosslytics.com/g.js" data-site-id="YOUR_SITE_ID"></script>`
 - Stripe, Polar, Lemon Squeezy, Gumroad and Dodo Payments checkout links are tagged automatically. PayPal uses custom_id, Cashfree order_tags.visitor_id, RevenueCat the subscriber attribute visitor_id. Paddle requires custom_data.visitor_id via its checkout integration; Razorpay requires notes.visitor_id.
 - Stripe events: checkout.session.completed, invoice.paid, invoice_payment.paid, charge.refunded (full refunds).
@@ -33,22 +33,22 @@
 - Lifetime: $29 one time. One-command installer and updates (no git or Bun), priority email support, and a commercial license without AGPL obligations
 
 ## Compared with alternatives (competitor facts from their websites, checked 2026-11-06)
-- DataFast: also revenue-first with MCP; supports Stripe, Lemon Squeezy, Polar, Shopify; from $9/month. Grosslytics adds Razorpay and Paddle, fee deduction, and self-hosting. Tracker 4.5 KB vs 1.5 KB.
-- DataBull: also self-hosted on Cloudflare with MCP; supports Stripe, Polar, Dodo, Creem; $49 once or hosted from $9/month. Both support Dodo; Grosslytics adds Razorpay, Paddle, Lemon Squeezy and fee deduction. Tracker 6.4 KB vs 1.5 KB.
+- DataFast: also revenue-first with MCP; supports Stripe, Lemon Squeezy, Polar, Shopify; from $9/month. Grosslytics adds Razorpay and Paddle, fee deduction, and self-hosting. Tracker 4.5 KB vs 1.8 KB.
+- DataBull: also self-hosted on Cloudflare with MCP; supports Stripe, Polar, Dodo, Creem; $49 once or hosted from $9/month. Both support Dodo; Grosslytics adds Razorpay, Paddle, Lemon Squeezy and fee deduction. Tracker 6.4 KB vs 1.8 KB.
 - Plausible: private web analytics, open source, 1.1 KB tracker, from $9/month; revenue via custom events. Grosslytics adds payment-provider attribution and net revenue.
-- Google Analytics 4: free and deep; gtag.js is 125 KB and uses cookies. Grosslytics is 1.5 KB with no cookies.
+- Google Analytics 4: free and deep; gtag.js is 125 KB and uses cookies. Grosslytics is 1.8 KB with no cookies.
 
 ## Pages
 - Comparisons: /compare/datafast-alternative/, /compare/databull-alternative/, /compare/plausible-alternative/, /compare/ga4-alternative/
 - Docs: /docs/
 - Live demo: /app/
-- [7 Best DataFast Alternatives for SaaS Revenue Tracking](https://grosslytics.com/compare/datafast-alternative.md): Compare seven DataFast alternatives by payment tracking, event pricing, self-hosting and fee reporting, with practical tradeoffs for SaaS founders.
+- [7 DataFast Alternatives for SaaS Revenue Tracking](https://grosslytics.com/compare/datafast-alternative.md): Compare seven DataFast alternatives by payment tracking, event pricing, self-hosting and fee reporting, with practical tradeoffs for SaaS founders.
 - [5 Best DataBull Alternatives for Paddle & Net Revenue](https://grosslytics.com/compare/databull-alternative.md): Compare five DataBull alternatives for Paddle, Razorpay, attribution and hosting. See license costs, fee estimates and the limits of each approach.
 - [DataFast vs DataBull vs Grosslytics: Costs & Features](https://grosslytics.com/compare/datafast-vs-databull.md): Compare DataFast, DataBull and Grosslytics across 12 practical criteria, with annual cost scenarios, attribution definitions and a measured local tracker build.
 - [Plausible vs Grosslytics: SaaS Revenue Tracking Compared](https://grosslytics.com/compare/plausible-alternative.md): Compare Plausible revenue goals with Grosslytics payment webhooks, including renewals, refunds, observed LTV and the difference between payments and MRR.
 - [PostHog vs Grosslytics: Focused Revenue Attribution](https://grosslytics.com/compare/posthog-alternative.md): Compare PostHog with lightweight revenue analytics for Stripe attribution: scope, setup, pricing, measured tracker size and the reporting you give up.
 - [How to Track Stripe Revenue by Traffic Source](https://grosslytics.com/blog/stripe-revenue-attribution.md): Connect Stripe Checkout and Payment Links to visitor sources, configure signed webhooks and verify fees, renewals and attribution limits in Grosslytics.
-- [How to Track Polar & Dodo Payments Revenue by Channel](https://grosslytics.com/blog/polar-dodo-payments-analytics.md): Connect Polar, Dodo Payments and Lemon Squeezy checkouts to visitor sources using provider-specific metadata and signed webhooks, with renewal and refund limits.
+- [How to Track Polar & Dodo Payments Revenue by Channel](https://grosslytics.com/blog/polar-dodo-payments-analytics.md): Attribute Polar, Dodo Payments and Lemon Squeezy sales to traffic sources. Configure checkout metadata and verify renewals, refunds and webhooks.
 - [How to Attribute Razorpay Payments to Traffic Sources](https://grosslytics.com/blog/razorpay-revenue-attribution.md): Connect Razorpay Standard Checkout payments to UTMs with payment notes and signed payment.captured events. Understand Payment Link, subscription and currency limits.
 - [How to Track Paddle Revenue & Observed LTV by Source](https://grosslytics.com/blog/paddle-revenue-attribution.md): Attribute Paddle Billing transactions to visitor sources with customData and signed webhooks. Learn the limits of fee estimates, recurring receipts and observed LTV.
 - [How to Self-Host Revenue Analytics on Cloudflare D1](https://grosslytics.com/blog/cloudflare-d1-web-analytics.md): Deploy Grosslytics on Cloudflare Workers and D1 in five steps. Understand free-tier limits, queue costs, source and licensed install paths, and verification.

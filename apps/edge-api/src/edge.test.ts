@@ -1,8 +1,8 @@
 import { test, expect } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { Hono } from 'hono';
-import { ALL_MIGRATIONS, MIGRATION_011_SECRETS } from '@grosslytics/db-d1/migrations';
-import { requireToken } from './auth.js';
+import { ALL_MIGRATIONS, MIGRATION_011_SECRETS, MIGRATION_014_SECURITY } from '@grosslytics/db-d1/migrations';
+import { hashToken, requireToken } from './auth.js';
 import { mcpRoute } from './mcp.js';
 import { statsRoute } from './routes/stats.js';
 import { webhooksRoute } from './routes/webhooks.js';
@@ -21,6 +21,10 @@ import { formatMoney } from '@grosslytics/shared/money';
 import { D1StorageAdapter, ingestEvents, queryDashboard, siteRange } from '@grosslytics/db-d1';
 import { dateRangeToTimestamps, tzOffsetSec } from '@grosslytics/shared/attribution';
 import { verifyWebhook } from './verify.js';
+import { liveAuthorized, redeemLiveTicket } from './live-auth.js';
+import { encryptSiteSecret, readSiteSecret, migrateSiteSecrets } from './site-secrets.js';
+import { checkFooter } from './footer.js';
+import type { Bindings } from './env.js';
 
 // Minimal D1 shim over bun:sqlite — enough for drizzle's d1 driver
 function fakeD1() {
@@ -76,7 +80,7 @@ function makeApp(extra: Record<string, unknown> = {}) {
 	app.route('/api/license', licenseRoute);
 	app.route('/api/event', collectRoute);
 	app.route('/api/crawl', crawlRoute);
-	const env = { DB: d1, STRIPE_WEBHOOK_SECRET: SECRET, API_TOKEN: 'tok', ...extra };
+	const env = { DB: d1, STRIPE_WEBHOOK_SECRET: SECRET, API_TOKEN: 'tok', SITE_SECRETS_KEY: 'ab'.repeat(32), WEBHOOK_SITE_ID: 's1', PLUNK_API_KEY: 'sk_test', PLUNK_FROM_EMAIL: 'accounts@example.test', ...extra };
 	const fetch = async (url: string, init?: RequestInit) => {
 		const waits: Promise<unknown>[] = [];
 		const res = await app.fetch(new Request(`http://x${url}`, init), env, { waitUntil: (p: Promise<unknown>) => waits.push(p), passThroughOnException() {} } as any);
@@ -84,6 +88,21 @@ function makeApp(extra: Record<string, unknown> = {}) {
 		return res;
 	};
 	return { fetch, sqlite, d1 };
+}
+
+async function emailCode(app: ReturnType<typeof makeApp>, purpose: 'account' | 'license', subject: string) {
+	const code = '0123456789'.repeat(4);
+	await app.d1.prepare('INSERT INTO email_proofs VALUES (?, ?, ?, unixepoch(), unixepoch() + 900)').bind(purpose, subject, await hashToken(code)).run();
+	return code;
+}
+
+async function signUp(app: ReturnType<typeof makeApp>, email: string) {
+	const code = await emailCode(app, 'account', email.trim().toLowerCase());
+	return app.fetch('/api/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'correct horse', code }) });
+}
+
+function claim(app: ReturnType<typeof makeApp>, sessionId: string, code?: string) {
+	return app.fetch('/api/license/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId, code }) });
 }
 
 test('verify: stripe accepts valid, rejects tampered, stale and missing signatures', async () => {
@@ -134,14 +153,14 @@ test('Paddle: only approved full refunds remove sales, including refunds deliver
 	expect(await (await send(approved)).json()).toEqual({ received: true, deduplicated: true });
 	const sale = { event_id: 'sale', event_type: 'transaction.completed', data: { id: 'txn_1', currency_code: 'USD', details: { totals: { grand_total: '10000', tax: '0' } } } };
 	expect((await send(sale)).status).toBe(200);
-	expect(app.sqlite.query("SELECT status FROM payments WHERE payment_id = 'txn_1'").get()).toEqual({ status: 'refunded' });
-	expect(app.sqlite.query('SELECT payment_id FROM refunds').all()).toEqual([{ payment_id: 'txn_1' }]);
+	expect(app.sqlite.query("SELECT status FROM payment_records WHERE payment_id = 'txn_1'").get()).toEqual({ status: 'refunded' });
+	expect(app.sqlite.query('SELECT payment_id FROM payment_refunds').all()).toEqual([{ payment_id: 'txn_1' }]);
 
 	const secondSale = { ...sale, event_id: 'sale_2', data: { ...sale.data, id: 'txn_2' } };
 	await send(secondSale);
 	const created = { ...adjustment('created', 'approved'), event_type: 'adjustment.created', data: { ...adjustment('created', 'approved').data, id: 'adj_2', transaction_id: 'txn_2' } };
 	expect(await (await send(created)).json()).toEqual({ received: true, refunded: true });
-	expect(app.sqlite.query("SELECT status FROM payments WHERE payment_id = 'txn_2'").get()).toEqual({ status: 'refunded' });
+	expect(app.sqlite.query("SELECT status FROM payment_records WHERE payment_id = 'txn_2'").get()).toEqual({ status: 'refunded' });
 });
 
 test('webhooks: unsigned rejected; signed sale attributed, deduped, and in linear stats', async () => {
@@ -164,7 +183,7 @@ test('webhooks: unsigned rejected; signed sale attributed, deduped, and in linea
 	expect(await (await post(await stripeHeaders(body))).json()).toEqual({ received: true });
 	expect(await (await post(await stripeHeaders(body))).json()).toEqual({ received: true, deduplicated: true });
 
-	const pay = app.sqlite.query('SELECT * FROM payments').all() as any[];
+	const pay = app.sqlite.query('SELECT * FROM payment_records').all() as any[];
 	expect(pay.length).toBe(1);
 	expect(pay[0].first_touch_source).toBe('google.com');
 	expect(pay[0].last_touch_source).toBe('x.com (in-app)');
@@ -225,10 +244,10 @@ function seedDashboard(sqlite: Database, NOW = FIXED_NOW) {
 	ev.run('s1', 'v2', 'c', 'pageview', '/', 'google.com', 0, NOW - 86400);
 	// crawler traffic never counts as visitors
 	ev.run('s1', 'bot', 'd', 'ai_crawl', '/', 'GPTBot', 0, NOW - 3600);
-	sqlite.exec(`INSERT INTO payments (payment_id, site_id, gateway, visitor_id, customer_email_masked, gross_amount_cents, fee_amount_cents, net_amount_cents, status, first_touch_source, last_touch_source, country, time_to_convert_hours, created_at)
+	sqlite.exec(`INSERT INTO payment_records (payment_id, site_id, gateway, visitor_id, customer_email_masked, gross_amount_cents, fee_amount_cents, net_amount_cents, status, first_touch_source, last_touch_source, country, time_to_convert_hours, created_at)
 		VALUES ('p1', 's1', 'stripe', 'v1', 'm***@hey.com', 10000, 320, 9680, 'succeeded', 'x.com (in-app)', 'chatgpt.com (AI)', 'US', 70, ${NOW - 3600}),
 		       ('p0', 's1', 'stripe', 'v1', 'm***@hey.com', 5000, 175, 4825, 'refunded', 'x.com (in-app)', 'chatgpt.com (AI)', 'US', 70, ${NOW - 3600})`);
-	sqlite.exec(`INSERT INTO refunds (payment_id, site_id, refunded_at) VALUES ('p0', 's1', ${NOW - 1800})`);
+	sqlite.exec(`INSERT INTO payment_refunds (payment_id, site_id, gateway, refunded_at) VALUES ('p0', 's1', 'stripe', ${NOW - 1800})`);
 	sqlite.exec("INSERT INTO ad_spend (site_id, source, spend_date, amount_cents) VALUES ('s1', 'x.com (in-app)', '2026-03-30', 2000)");
 	sqlite.exec(`INSERT INTO annotations (site_id, at, label) VALUES ('s1', ${NOW - 86400}, 'Launched')`);
 }
@@ -305,7 +324,7 @@ test('dashboard: totals, attribution models, filters, pages, funnel and profit a
 	expect(day.totals.visitors).toBe(1); // only v1 was active in the last 24 hours
 
 	// A renewal adds revenue but is not a new sale (conversion and the buyer heatmap stay honest)
-	sqlite.exec(`INSERT INTO payments (payment_id, site_id, gateway, visitor_id, gross_amount_cents, fee_amount_cents, net_amount_cents, status, is_renewal, first_touch_source, last_touch_source, created_at)
+	sqlite.exec(`INSERT INTO payment_records (payment_id, site_id, gateway, visitor_id, gross_amount_cents, fee_amount_cents, net_amount_cents, status, is_renewal, first_touch_source, last_touch_source, created_at)
 		VALUES ('p2', 's1', 'stripe', 'v1', 4000, 146, 3854, 'succeeded', 1, 'x.com (in-app)', 'chatgpt.com (AI)', ${NOW - 1800})`);
 	const renewed = await q();
 	expect(renewed.totals).toMatchObject({ gross: 14000, sales: 1 });
@@ -369,12 +388,12 @@ test('webhooks: a full Stripe refund marks the payment refunded once; partial re
 	};
 	await send({ id: 'evt_pay', type: 'checkout.session.completed', data: { object: { id: 'cs_9', payment_intent: 'pi_9', payment_status: 'paid', amount_total: 900, currency: 'usd' } } });
 	expect(await send({ id: 'evt_part', type: 'charge.refunded', data: { object: { payment_intent: 'pi_9', refunded: false } } })).toEqual({ received: true, ignored: true });
-	expect((app.sqlite.query("SELECT status FROM payments WHERE payment_id = 'pi_9'").get() as any).status).toBe('succeeded');
+	expect((app.sqlite.query("SELECT status FROM payment_records WHERE payment_id = 'pi_9'").get() as any).status).toBe('succeeded');
 	const refund = { id: 'evt_ref', type: 'charge.refunded', data: { object: { payment_intent: 'pi_9', refunded: true } } };
 	expect((await send(refund)) as any).toMatchObject({ received: true });
 	expect(await send(refund)).toEqual({ received: true, deduplicated: true });
-	expect((app.sqlite.query("SELECT status FROM payments WHERE payment_id = 'pi_9'").get() as any).status).toBe('refunded');
-	expect(app.sqlite.query('SELECT payment_id FROM refunds').all()).toEqual([{ payment_id: 'pi_9' }]);
+	expect((app.sqlite.query("SELECT status FROM payment_records WHERE payment_id = 'pi_9'").get() as any).status).toBe('refunded');
+	expect(app.sqlite.query('SELECT payment_id FROM payment_refunds').all()).toEqual([{ payment_id: 'pi_9' }]);
 });
 
 const checkout = (id = 'evt_checkout', invoice = 'in_1') => ({
@@ -435,7 +454,7 @@ test('Stripe: either checkout/invoice order fills attribution and broadcasts onl
 		seedBuyer(app.sqlite);
 		for (const event of events) expect((await stripePost(app, event)).status).toBe(200);
 		await Promise.all([stripePost(app, checkout()), stripePost(app, checkout())]);
-		expect(app.sqlite.query('SELECT payment_id, visitor_id, first_touch_source, last_touch_source, plan_name FROM payments').all()).toEqual([
+		expect(app.sqlite.query('SELECT payment_id, visitor_id, first_touch_source, last_touch_source, plan_name FROM payment_records').all()).toEqual([
 			{ payment_id: 'in_1', visitor_id: 'v1', first_touch_source: 'google.com', last_touch_source: 'x.com', plan_name: 'Pro' },
 		]);
 		expect(alerts).toBe(1);
@@ -451,7 +470,7 @@ test('a queued visit arriving after checkout fills attribution and links future 
 	const renewal = invoicePaid('evt_renewal');
 	renewal.data.object.id = 'in_renewal';
 	await stripePost(app, renewal);
-	expect(app.sqlite.query('SELECT first_touch_source FROM payments').all()).toEqual([{ first_touch_source: 'google.com' }, { first_touch_source: 'google.com' }]);
+	expect(app.sqlite.query('SELECT first_touch_source FROM payment_records').all()).toEqual([{ first_touch_source: 'google.com' }, { first_touch_source: 'google.com' }]);
 	expect((app.sqlite.query('SELECT customer_email_hash FROM visitors').get() as any).customer_email_hash).toBeTruthy();
 });
 
@@ -465,10 +484,10 @@ test('Stripe: refunds survive every delivery order and late success events canno
 		seedBuyer(app.sqlite);
 		for (const event of events) expect((await stripePost(app, event)).status).toBe(200);
 		await stripePost(app, invoicePaid('evt_late_success'));
-		expect(app.sqlite.query('SELECT payment_id, status, first_touch_source FROM payments').all()).toEqual([
+		expect(app.sqlite.query('SELECT payment_id, status, first_touch_source FROM payment_records').all()).toEqual([
 			{ payment_id: 'in_1', status: 'refunded', first_touch_source: 'google.com' },
 		]);
-		expect(app.sqlite.query('SELECT payment_id FROM refunds').all()).toEqual([{ payment_id: 'in_1' }]);
+		expect(app.sqlite.query('SELECT payment_id FROM payment_refunds').all()).toEqual([{ payment_id: 'in_1' }]);
 	}
 });
 
@@ -476,7 +495,7 @@ test('Stripe: failed refund transaction leaves no receipt and succeeds on retry'
 	const app = makeApp();
 	await stripePost(app, invoicePaid());
 	await stripePost(app, invoiceLink);
-	app.sqlite.exec("CREATE TRIGGER fail_refund BEFORE UPDATE OF status ON payments WHEN NEW.status = 'refunded' BEGIN SELECT RAISE(ABORT, 'injected refund failure'); END");
+	app.sqlite.exec("CREATE TRIGGER fail_refund BEFORE UPDATE OF status ON payment_records WHEN NEW.status = 'refunded' BEGIN SELECT RAISE(ABORT, 'injected refund failure'); END");
 	const originalError = console.error;
 	console.error = () => {};
 	try { expect((await stripePost(app, refund)).status).toBe(500); } finally { console.error = originalError; }
@@ -485,7 +504,7 @@ test('Stripe: failed refund transaction leaves no receipt and succeeds on retry'
 	app.sqlite.exec('DROP TRIGGER fail_refund');
 	expect((await stripePost(app, refund)).status).toBe(200);
 	expect(await (await stripePost(app, refund)).json()).toEqual({ received: true, deduplicated: true });
-	expect(app.sqlite.query('SELECT status FROM payments').get()).toEqual({ status: 'refunded' });
+	expect(app.sqlite.query('SELECT status FROM payment_records').get()).toEqual({ status: 'refunded' });
 });
 
 test('money: one reporting currency, explicit rejection and no mixed historical totals', async () => {
@@ -497,7 +516,7 @@ test('money: one reporting currency, explicit rejection and no mixed historical 
 	expect((await stripePost(app, payment)).status).toBe(422);
 	payment.data.object.currency = 'eur';
 	expect((await stripePost(app, payment)).status).toBe(200); // a rejection never claims the event
-	app.sqlite.exec("INSERT INTO payments (payment_id, site_id, gateway, gross_amount_cents, net_amount_cents, status, currency) VALUES ('legacy_usd', 's1', 'stripe', 5000, 5000, 'succeeded', 'usd')");
+	app.sqlite.exec("INSERT INTO payment_records (payment_id, site_id, gateway, gross_amount_cents, net_amount_cents, status, currency) VALUES ('legacy_usd', 's1', 'stripe', 5000, 5000, 'succeeded', 'usd')");
 	const data = await queryDashboard(app.d1, 's1', { range: '30d', model: 'first', mode: 'gross', filters: [] });
 	expect(data.currency).toBe('EUR');
 	expect(data.excludedCurrencies).toEqual(['USD']);
@@ -526,7 +545,7 @@ test('Polar: signed order reads the checkout reference_id and attributes the sal
 	const signature = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(`msg_order.${ts}.${body}`)))));
 	const res = await app.fetch('/api/webhooks/polar?siteId=s1', { method: 'POST', body, headers: { 'webhook-id': 'msg_order', 'webhook-timestamp': ts, 'webhook-signature': `v1,${signature}` } });
 	expect(res.status).toBe(200);
-	expect(app.sqlite.query('SELECT visitor_id, first_touch_source FROM payments').get()).toEqual({ visitor_id: 'v1', first_touch_source: 'google.com' });
+	expect(app.sqlite.query('SELECT visitor_id, first_touch_source FROM payment_records').get()).toEqual({ visitor_id: 'v1', first_touch_source: 'google.com' });
 });
 
 const trackedEvent = (changes: Partial<EnrichedEvent> = {}): EnrichedEvent => ({
@@ -534,7 +553,7 @@ const trackedEvent = (changes: Partial<EnrichedEvent> = {}): EnrichedEvent => ({
 	country: 'US', city: 'Austin', colo: 'DFW', asOrganization: '', deviceType: 'desktop', os: 'macOS', browser: 'Chrome', createdAt: NOW - 100, ...changes,
 });
 const addPayment = (db: Database, id: string, amount: number, at = NOW - 50, visitor: string | null = 'v1', first = 'google.com', last = first) => db.run(
-	"INSERT INTO payments (payment_id, site_id, gateway, visitor_id, gross_amount_cents, fee_amount_cents, net_amount_cents, status, first_touch_source, last_touch_source, created_at) VALUES (?, 's1', 'stripe', ?, ?, 0, ?, 'succeeded', ?, ?, ?)",
+	"INSERT INTO payment_records (payment_id, site_id, gateway, visitor_id, gross_amount_cents, fee_amount_cents, net_amount_cents, status, first_touch_source, last_touch_source, created_at) VALUES (?, 's1', 'stripe', ?, ?, 0, ?, 'succeeded', ?, ?, ?)",
 	[id, visitor, amount, amount, first, last, at],
 );
 
@@ -696,7 +715,7 @@ test('timezones: days, heatmap hours, ad-spend days and channel ranges follow th
 	// 01:30 in India is 20:00 UTC the previous day: the sale belongs to today's local bar and the 1am heatmap row.
 	const localMidnight = Math.floor((NOW + 19800) / 86400) * 86400 - 19800;
 	const at = localMidnight + 3600 + 1800; // 01:30 local today
-	app.sqlite.exec(`INSERT INTO payments (payment_id, site_id, gateway, gross_amount_cents, fee_amount_cents, net_amount_cents, status, first_touch_source, last_touch_source, created_at) VALUES ('tz1', 's1', 'stripe', 1000, 0, 1000, 'succeeded', 'x', 'x', ${at})`);
+	app.sqlite.exec(`INSERT INTO payment_records (payment_id, site_id, gateway, gross_amount_cents, fee_amount_cents, net_amount_cents, status, first_touch_source, last_touch_source, created_at) VALUES ('tz1', 's1', 'stripe', 1000, 0, 1000, 'succeeded', 'x', 'x', ${at})`);
 	app.sqlite.exec("INSERT INTO ad_spend VALUES ('s1', 'google.com', '2026-01-01', 0)"); // outside every range
 	const data = await queryDashboard(app.d1, 's1', { range: '7d', model: 'first', mode: 'gross', filters: [], now: NOW });
 	expect(data.timezone).toBe('Asia/Kolkata');
@@ -743,7 +762,7 @@ test('api tokens: master creates read-only site tokens, stored hashed, scoped, r
 	expect((await as('gl_pat_' + '0'.repeat(40), '/api/stats/dashboard?siteId=s1')).status).toBe(401);
 });
 
-test('owner login: API_TOKEN sets the password, session cookie unlocks the API, lockout, reset and logout', async () => {
+test('owner login: API_TOKEN sets the password, session cookie unlocks the API, reset and logout', async () => {
 	const app = makeApp();
 	const json = { 'content-type': 'application/json' };
 	const post = (url: string, body: object, headers: Record<string, string> = {}) => app.fetch(url, { method: 'POST', headers: { ...json, ...headers }, body: JSON.stringify(body) });
@@ -768,12 +787,12 @@ test('owner login: API_TOKEN sets the password, session cookie unlocks the API, 
 	expect((await app.fetch('/api/stats/sites/s1/share', { method: 'POST', headers: { cookie: s1, 'content-type': 'text/plain' }, body: '{"enabled":true}' })).status).toBe(401);
 	expect((await post('/api/stats/sites/s1/share', { enabled: true }, { cookie: s1 })).status).toBe(200);
 
-	// Login, then five wrong passwords lock it even for the right one
+	// Failed attempts from one network cannot lock out the owner.
 	const login = await post('/api/auth/login', { password: 'correct horse' });
 	expect(login.status).toBe(200);
 	const s2 = cookieOf(login);
 	for (let i = 0; i < 5; i++) expect((await post('/api/auth/login', { password: 'nope' })).status).toBe(401);
-	expect((await post('/api/auth/login', { password: 'correct horse' })).status).toBe(429);
+	expect((await post('/api/auth/login', { password: 'correct horse' })).status).toBe(200);
 
 	// Reset with API_TOKEN: unlocks, and signs every old session out
 	const reset = await post('/api/auth/setup', { setupKey: 'tok', password: 'new password!' });
@@ -787,7 +806,7 @@ test('owner login: API_TOKEN sets the password, session cookie unlocks the API, 
 
 test('cloud: signup, per-account sites, own webhook secrets, trial and cap stop ingest, Stripe billing turns accounts on and off', async () => {
 	const sent: unknown[] = [];
-	const app = makeApp({ CLOUD: '1', STRIPE_BILLING_WEBHOOK_SECRET: SECRET, INGEST_QUEUE: { send: async (m: unknown) => void sent.push(m) } });
+	const app = makeApp({ CLOUD: '1', STRIPE_BILLING_WEBHOOK_SECRET: SECRET, CLOUD_STRIPE_PAYMENT_LINK_ID: 'plink_cloud', INGEST_QUEUE: { send: async (m: unknown) => void sent.push(m) } });
 	const json = { 'content-type': 'application/json' };
 	const post = (url: string, body: object, cookie = '') => app.fetch(url, { method: 'POST', headers: { ...json, cookie }, body: JSON.stringify(body) });
 	const get = (url: string, cookie = '') => app.fetch(url, { headers: { cookie } });
@@ -797,9 +816,9 @@ test('cloud: signup, per-account sites, own webhook secrets, trial and cap stop 
 	expect(await status()).toEqual({ cloud: true, signedIn: false, account: null });
 	expect((await post('/api/auth/setup', { setupKey: 'tok', password: 'correct horse' })).status).toBe(404);
 	expect((await post('/api/auth/signup', { email: 'nope', password: 'correct horse' })).status).toBe(400);
-	const a = cookieOf(await post('/api/auth/signup', { email: 'A@x.io ', password: 'correct horse' }));
-	expect((await post('/api/auth/signup', { email: 'a@x.io', password: 'another one!' })).status).toBe(409);
-	const b = cookieOf(await post('/api/auth/signup', { email: 'b@y.io', password: 'correct horse' }));
+	const a = cookieOf(await signUp(app, 'A@x.io '));
+	expect((await post('/api/auth/signup', { email: 'a@x.io', password: 'another one!' })).status).toBe(202);
+	const b = cookieOf(await signUp(app, 'b@y.io'));
 	const sa = await status(a);
 	expect(sa.account).toMatchObject({ email: 'a@x.io', status: 'trial', active: true, used: 0, cap: CLOUD_EVENT_CAP });
 
@@ -819,7 +838,7 @@ test('cloud: signup, per-account sites, own webhook secrets, trial and cap stop 
 	expect((await post('/api/stats/tokens', { siteId: siteB, name: 'x' }, a)).status).toBe(403);
 	const tok = (await (await post('/api/stats/tokens', { siteId: siteA, name: 'mine' }, a)).json()) as any;
 	expect((await post(`/api/stats/tokens/${tok.id}/revoke`, {}, b)).status).toBe(403);
-	expect((await get(`/api/stats/live?siteId=${siteB}`, a)).status).toBe(403);
+	expect((await get(`/api/stats/live-ticket?siteId=${siteB}`, a)).status).toBe(403);
 
 	// Payment webhooks use the site's own secret; the operator's env secret is never a fallback on Cloud
 	expect((await post(`/api/stats/sites/${siteA}/secrets`, { gateway: 'stripe', secret: SECRET }, a)).status).toBe(200);
@@ -850,13 +869,14 @@ test('cloud: signup, per-account sites, own webhook secrets, trial and cap stop 
 	expect((await post('/api/stats/sites', { domain: 'd.io' }, b)).status).toBe(402);
 
 	// Billing: the Payment Link carries the account id; subscription events follow it
+	let created = Math.floor(Date.now() / 1000);
 	const bill = async (event: object, signed = true) => {
-		const body = JSON.stringify(event);
+		const body = JSON.stringify({ created: created++, ...event });
 		return app.fetch('/api/billing/stripe', { method: 'POST', headers: signed ? await stripeHeaders(body) : {}, body });
 	};
 	const bId = (await status(b)).account.id;
-	expect((await bill({ type: 'checkout.session.completed', data: { object: { client_reference_id: bId, subscription: 'sub_1', customer: 'cus_1' } } }, false)).status).toBe(401);
-	await bill({ type: 'checkout.session.completed', data: { object: { client_reference_id: bId, subscription: 'sub_1', customer: 'cus_1' } } });
+	expect((await bill({ type: 'checkout.session.completed', data: { object: { client_reference_id: bId, subscription: 'sub_1', customer: 'cus_1', mode: 'subscription', payment_status: 'paid', payment_link: 'plink_cloud' } } }, false)).status).toBe(401);
+	await bill({ type: 'checkout.session.completed', data: { object: { client_reference_id: bId, subscription: 'sub_1', customer: 'cus_1', mode: 'subscription', payment_status: 'paid', payment_link: 'plink_cloud' } } });
 	expect((await status(b)).account).toMatchObject({ status: 'active', active: true });
 	await bill({ type: 'customer.subscription.updated', data: { object: { id: 'sub_1', status: 'past_due', items: { data: [{ current_period_end: 1900000000 }] } } } });
 	expect((await status(b)).account).toMatchObject({ status: 'past_due', active: true, periodEnd: 1900000000 });
@@ -871,20 +891,21 @@ test('lifetime: a paid one-time checkout mints a license, the buyer claims it, a
 		const body = JSON.stringify({ type: 'checkout.session.completed', data: { object } });
 		return (await app.fetch('/api/billing/stripe', { method: 'POST', headers: await stripeHeaders(body), body })).json() as Promise<any>;
 	};
-	const session = { id: 'cs_test_abcdefghij123', mode: 'payment', payment_status: 'paid', payment_link: 'plink_life', customer_details: { email: 'buyer@x.io' } };
-	const claim = (id: string) => app.fetch(`/api/license/claim?session_id=${id}`);
+	const session = { id: 'cs_test_abcdefghij123', mode: 'payment', payment_status: 'paid', payment_link: 'plink_life', payment_intent: 'pi_lifetime', customer_details: { email: 'buyer@x.io' } };
 
-	expect((await claim(session.id)).status).toBe(404); // webhook not here yet: the page keeps polling
+	expect((await claim(app, session.id)).status).toBe(404); // webhook not here yet: the page keeps polling
 	expect(await bill({ ...session, payment_status: 'unpaid' })).toMatchObject({ ignored: true });
 	expect(await bill({ ...session, payment_link: 'plink_other' })).toMatchObject({ ignored: true });
 	expect(await bill(session)).toMatchObject({ license: true });
 	expect(await bill(session)).toMatchObject({ license: true }); // Stripe retry: still one license
 	expect((app.sqlite.query('SELECT COUNT(*) AS n FROM licenses').get() as any).n).toBe(1);
-	expect((await claim('bad')).status).toBe(400);
+	expect((await claim(app, 'bad')).status).toBe(400);
 
-	const { key, email } = (await (await claim(session.id)).json()) as any;
+	const code = await emailCode(app, 'license', session.id);
+	const { key, email } = (await (await claim(app, session.id, code)).json()) as any;
+	expect((await claim(app, session.id, code)).status).toBe(400);
 	expect(key).toMatch(/^gl_lic_[0-9a-f]{32}$/);
-	expect(email).toBe('buyer@x.io');
+	expect(email).toBeUndefined();
 	expect(JSON.stringify(app.sqlite.query('SELECT * FROM licenses').all())).not.toContain(key);
 
 	const dl = (k: string) => app.fetch('/api/license/download', { headers: { authorization: `Bearer ${k}` } });
@@ -926,7 +947,7 @@ const b64hmac = async (secret: string, msg: string) => {
 	return btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign('HMAC', k, enc.encode(msg)))));
 };
 const bearer = { authorization: 'Bearer tok', 'content-type': 'application/json' };
-const payment = (sqlite: Database, id: string) => sqlite.query('SELECT gross_amount_cents g, fee_amount_cents f, net_amount_cents n, visitor_id v, status, created_at FROM payments WHERE payment_id = ?').get(id) as any;
+const payment = (sqlite: Database, id: string) => sqlite.query('SELECT gross_amount_cents g, fee_amount_cents f, net_amount_cents n, visitor_id v, status, created_at FROM payment_records WHERE payment_id = ?').get(id) as any;
 
 test('new gateways: cashfree, revenuecat and gumroad verify, record, and refuse bad secrets', async () => {
 	const { fetch, sqlite } = makeApp();
@@ -1020,13 +1041,16 @@ test('stripe import: pages through sessions then invoices, keeps real dates, ski
 
 test('ai crawlers: server reports counted per bot and page, never as visitors', async () => {
 	const { fetch, sqlite } = makeApp();
-	const crawl = (body: object) => fetch('/api/crawl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+	const created = await fetch('/api/stats/sites/s1/crawl-key', { method: 'POST', headers: bearer });
+	const { key } = await created.json() as { key: string };
+	const crawl = (body: object, auth = key) => fetch('/api/crawl', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${auth}` }, body: JSON.stringify(body) });
 	const ua = 'Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)';
 	expect((await crawl({ sid: 's1', path: '/pricing?x=1', ua })).status).toBe(202);
 	expect((await crawl({ sid: 's1', path: '/pricing', ua })).status).toBe(202);
 	expect((await crawl({ sid: 's1', path: '/', ua: 'ClaudeBot/1.0' })).status).toBe(202);
 	expect((await crawl({ sid: 's1', path: '/', ua: 'Mozilla/5.0 Chrome' })).status).toBe(202); // a person: ignored
-	expect((await crawl({ sid: 'nope', path: '/', ua })).status).toBe(404);
+	expect((await crawl({ sid: 'nope', path: '/', ua })).status).toBe(401);
+	expect((await crawl({ sid: 's1', path: '/', ua }, '')).status).toBe(401);
 	expect(sqlite.query('SELECT COUNT(*) n FROM visitors').get()).toEqual({ n: 0 });
 	const r = (await (await fetch('/api/stats/ai-crawls?siteId=s1&range=24h', { headers: bearer })).json()) as any;
 	expect(r.bots).toEqual([{ k: 'GPTBot', hits: 2 }, { k: 'ClaudeBot', hits: 1 }]);
@@ -1042,7 +1066,7 @@ test('clicks, bulk ad spend and the waitlist list (owner only, honeypot, rate li
 	ins.run('vb', meta('Pro plan'), now);
 	ins.run('vo', meta('Pro plan', 0, 1), now);
 	ins.run('vo', meta('Price table', 1), now);
-	sqlite.exec(`INSERT INTO payments (payment_id, site_id, gateway, visitor_id, gross_amount_cents, net_amount_cents, status) VALUES ('p1', 's1', 'stripe', 'vb', 900, 800, 'succeeded')`);
+	sqlite.exec(`INSERT INTO payment_records (payment_id, site_id, gateway, visitor_id, gross_amount_cents, net_amount_cents, status) VALUES ('p1', 's1', 'stripe', 'vb', 900, 800, 'succeeded')`);
 	const clicks = ((await (await fetch('/api/stats/clicks?siteId=s1&range=24h', { headers: bearer })).json()) as any).clicks;
 	expect(clicks[0]).toMatchObject({ page: '/pricing', el: 'Pro plan', clicks: 2, visitors: 2, buyers: 1, rage: 1, dead: 0 });
 	expect(clicks[1]).toMatchObject({ el: 'Price table', dead: 1, buyers: 0 });
@@ -1063,13 +1087,13 @@ test('clicks, bulk ad spend and the waitlist list (owner only, honeypot, rate li
 	expect((await fetch('/api/stats/waitlist')).status).toBe(401);
 });
 
-test('access: Cloud site ids must agree, owner-only lists, parallel guesses lock, share pages cached', async () => {
+test('access: Cloud site ids must agree, owner-only lists, login limits are per network, share pages cached', async () => {
 	const app = makeApp({ CLOUD: '1' });
 	const json = { 'content-type': 'application/json' };
 	const post = (url: string, body: object, cookie = '') => app.fetch(url, { method: 'POST', headers: { ...json, cookie }, body: JSON.stringify(body) });
 	const cookieOf = (res: Response) => (res.headers.get('set-cookie') ?? '').split(';')[0]!;
-	const a = cookieOf(await post('/api/auth/signup', { email: 'a@x.io', password: 'correct horse' }));
-	const b = cookieOf(await post('/api/auth/signup', { email: 'b@y.io', password: 'correct horse' }));
+	const a = cookieOf(await signUp(app, 'a@x.io'));
+	const b = cookieOf(await signUp(app, 'b@y.io'));
 	const siteA = ((await (await post('/api/stats/sites', { domain: 'a.io' }, a)).json()) as any).id;
 	const siteB = ((await (await post('/api/stats/sites', { domain: 'b.io' }, b)).json()) as any).id;
 
@@ -1080,23 +1104,29 @@ test('access: Cloud site ids must agree, owner-only lists, parallel guesses lock
 	expect((await post(`/api/stats/ad-spend?siteId=${siteA}`, { siteId: siteB, source: 'x', date: '2026-11-01', amountCents: 1 }, a)).status).toBe(403);
 	expect(app.sqlite.query('SELECT public_share_enabled p FROM sites WHERE site_id = ?').get(siteB)).toEqual({ p: 0 });
 	expect(app.sqlite.query('SELECT COUNT(*) n FROM site_secrets').get()).toEqual({ n: 0 });
-	expect((await post(`/api/stats/sites/${siteA}/share`, { enabled: true }, a)).status).toBe(200);
+	expect((await app.fetch('/api/share/acme.io')).status).toBe(404);
 	expect((await app.fetch(`/api/stats/waitlist?siteId=${siteA}`, { headers: { cookie: a } })).status).toBe(403);
 
 	// A read-only token can't reach the install-wide lists, whatever siteId it passes
-	const self = makeApp();
+	const attempts = new Map<string, number>();
+	const self = makeApp({ LOGIN_LIMITER: { limit: async ({ key }: { key: string }) => {
+		const count = (attempts.get(key) ?? 0) + 1;
+		attempts.set(key, count);
+		return { success: count <= 5 };
+	} } });
 	const pt = (await (await self.fetch('/api/stats/tokens', { method: 'POST', headers: { authorization: 'Bearer tok', ...json }, body: JSON.stringify({ siteId: 's1', name: 'ro' }) })).json()) as any;
 	const ro = { authorization: `Bearer ${pt.token}` };
 	expect((await self.fetch('/api/stats/waitlist?siteId=s1', { headers: ro })).status).toBe(403);
 	expect((await self.fetch('/api/stats/sites?siteId=s1', { headers: ro })).status).toBe(403);
 	expect((await self.fetch('/api/stats/dashboard?siteId=s1', { headers: ro })).status).toBe(200);
 
-	// Twenty guesses at once: at most five are checked, then the login is locked even for the right password
+	// Excess attempts throttle only the requesting network.
 	await self.fetch('/api/auth/setup', { method: 'POST', headers: json, body: JSON.stringify({ setupKey: 'tok', password: 'correct horse' }) });
-	const login = (password: string) => self.fetch('/api/auth/login', { method: 'POST', headers: json, body: JSON.stringify({ password }) });
+	const login = (password: string, ip = '192.0.2.1') => self.fetch('/api/auth/login', { method: 'POST', headers: { ...json, 'cf-connecting-ip': ip }, body: JSON.stringify({ password }) });
 	const tries = await Promise.all(Array.from({ length: 20 }, () => login('wrong guess!')));
 	expect(tries.filter((r) => r.status === 401).length).toBeLessThanOrEqual(5);
 	expect((await login('correct horse')).status).toBe(429);
+	expect((await login('correct horse', '192.0.2.2')).status).toBe(200);
 
 	// Share pages: the second view is served from the edge cache, with the caller's own CORS origin
 	const store = new Map<string, Response>();
@@ -1168,7 +1198,7 @@ test('retention: only events past a site\'s setting go, in capped rounds; sales 
 	add('s1', NOW - 91 * day, 4001);
 	add('s1', NOW - 89 * day);
 	add('other', NOW - 900 * day);
-	app.sqlite.run("INSERT INTO payments (payment_id, site_id, gateway, gross_amount_cents, net_amount_cents, status, created_at) VALUES ('old', 's1', 'stripe', 100, 90, 'succeeded', ?)", [NOW - 900 * day]);
+	app.sqlite.run("INSERT INTO payment_records (payment_id, site_id, gateway, gross_amount_cents, net_amount_cents, status, created_at) VALUES ('old', 's1', 'stripe', 100, 90, 'succeeded', ?)", [NOW - 900 * day]);
 
 	await pruneEvents(app.d1, 1, NOW);
 	expect(before('s1').n).toBe(start + 4002 - 2000);
@@ -1176,7 +1206,7 @@ test('retention: only events past a site\'s setting go, in capped rounds; sales 
 	expect(app.sqlite.query('SELECT COUNT(*) AS n FROM events WHERE site_id = ? AND created_at < ?').get('s1', NOW - 90 * day)).toEqual({ n: 0 });
 	expect(app.sqlite.query('SELECT COUNT(*) AS n FROM events WHERE site_id = ? AND created_at = ?').get('s1', NOW - 89 * day)).toEqual({ n: 1 });
 	expect(before('other').n).toBe(other + 1);
-	expect(app.sqlite.query("SELECT COUNT(*) AS n FROM payments WHERE payment_id = 'old'").get()).toEqual({ n: 1 });
+	expect(app.sqlite.query("SELECT COUNT(*) AS n FROM payment_records WHERE payment_id = 'old'").get()).toEqual({ n: 1 });
 
 	expect((await post('s1', 0)).status).toBe(200);
 	expect(app.sqlite.query('SELECT COUNT(*) AS n FROM site_retention').get()).toEqual({ n: 0 });
@@ -1210,10 +1240,10 @@ test('chart notes: the owner deletes a note only through its own site; share pag
 
 test('dodo: signed payments mint Lifetime licenses, subscription events turn Cloud accounts on and off', async () => {
 	const key = btoa('dodo-key-0123456789');
-	const app = makeApp({ CLOUD: '1', DODO_BILLING_WEBHOOK_SECRET: `whsec_${key}`, LICENSE_SECRET: 'lic-secret', LIFETIME_PRODUCT_ID: 'pdt_life' });
+	const app = makeApp({ CLOUD: '1', DODO_BILLING_WEBHOOK_SECRET: `whsec_${key}`, LICENSE_SECRET: 'lic-secret', LIFETIME_PRODUCT_ID: 'pdt_life', CLOUD_DODO_PRODUCT_ID: 'pdt_cloud' });
 	let n = 0;
 	const dodo = async (type: string, data: object, sign = true) => {
-		const body = JSON.stringify({ business_id: 'bus_1', type, timestamp: new Date().toISOString(), data });
+		const body = JSON.stringify({ business_id: 'bus_1', type, timestamp: new Date(Date.now() + n * 1000).toISOString(), data });
 		const id = `msg_${++n}`;
 		const ts = String(Math.floor(Date.now() / 1000));
 		const k = await crypto.subtle.importKey('raw', Uint8Array.from(atob(key), (ch) => ch.charCodeAt(0)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -1225,18 +1255,19 @@ test('dodo: signed payments mint Lifetime licenses, subscription events turn Clo
 	// Lifetime
 	const pay = { payment_id: 'pay_2IjeQm4hqU6RA4Z4kw', subscription_id: null, customer: { email: 'buyer@x.io' }, product_cart: [{ product_id: 'pdt_life', quantity: 1 }] };
 	expect((await dodo('payment.succeeded', pay, false)).status).toBe(401);
-	expect((await app.fetch(`/api/license/claim?payment_id=${pay.payment_id}`)).status).toBe(404);
+	expect((await claim(app, pay.payment_id)).status).toBe(404);
 	expect(await json(dodo('payment.succeeded', { ...pay, product_cart: [{ product_id: 'pdt_other' }] }))).toMatchObject({ ignored: true });
 	expect(await json(dodo('payment.succeeded', { ...pay, subscription_id: 'sub_9' }))).toMatchObject({ ignored: true });
 	expect(await json(dodo('payment.succeeded', pay))).toMatchObject({ license: true });
 	expect(await json(dodo('payment.succeeded', pay))).toMatchObject({ license: true }); // retry: still one license
 	expect((app.sqlite.query('SELECT COUNT(*) AS n FROM licenses').get() as any).n).toBe(1);
-	expect(await json(app.fetch(`/api/license/claim?payment_id=${pay.payment_id}`))).toMatchObject({ key: expect.stringMatching(/^gl_lic_/), email: 'buyer@x.io' });
+	const code = await emailCode(app, 'license', pay.payment_id);
+	expect(await json(claim(app, pay.payment_id, code))).toEqual({ key: expect.stringMatching(/^gl_lic_/) });
 
 	// Cloud: the checkout link's metadata names the account
 	app.sqlite.query("INSERT INTO accounts (id, email, password_hash, trial_ends_at) VALUES ('acc_1', 'c@x.io', 'x', 1)").run();
 	const account = () => app.sqlite.query("SELECT status, stripe_subscription_id s, current_period_end p FROM accounts WHERE id = 'acc_1'").get() as any;
-	const sub = (id: string) => ({ subscription_id: id, status: 'active', metadata: { account_id: 'acc_1' }, customer: { customer_id: 'cus_1' }, next_billing_date: '2026-12-07T00:00:00Z' });
+	const sub = (id: string) => ({ subscription_id: id, product_id: 'pdt_cloud', status: 'active', metadata: { account_id: 'acc_1' }, customer: { customer_id: 'cus_1' }, next_billing_date: '2026-12-07T00:00:00Z' });
 	expect(await json(dodo('subscription.active', sub('sub_1')))).toMatchObject({ matched: true });
 	expect(account()).toEqual({ status: 'active', s: 'sub_1', p: Date.parse('2026-12-07T00:00:00Z') / 1000 });
 	await dodo('subscription.on_hold', sub('sub_1'));
@@ -1258,7 +1289,7 @@ test('Dodo Payments: signed payment attributed via metadata, tax and fee taken o
 	sqlite.run("INSERT INTO site_secrets VALUES ('s1', 'dodo', ?)", [secret]);
 	let n = 0;
 	const send = async (type: string, data: object, sign = true) => {
-		const body = JSON.stringify({ business_id: 'bus_1', type, timestamp: new Date().toISOString(), data });
+		const body = JSON.stringify({ business_id: 'bus_1', type, timestamp: new Date(Date.now() + n * 1000).toISOString(), data });
 		const id = `msg_${++n}`;
 		const ts = String(Math.floor(Date.now() / 1000));
 		const k = await crypto.subtle.importKey('raw', Uint8Array.from(atob(secret.slice(6)), (ch) => ch.charCodeAt(0)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -1272,7 +1303,7 @@ test('Dodo Payments: signed payment attributed via metadata, tax and fee taken o
 	expect(await (await send('payment.succeeded', pay)).json()).toMatchObject({ deduplicated: true });
 	// $110 paid, $10 of it tax → $100 revenue; Dodo's 4% + 40¢ is estimated on the whole $110
 	expect(payment(sqlite, 'dodo_pay_abc123')).toMatchObject({ g: 10000, f: 480, n: 9520, v: 'v1', status: 'succeeded' });
-	expect((sqlite.query("SELECT first_touch_source s, country c FROM payments WHERE payment_id = 'dodo_pay_abc123'").get() as any)).toEqual({ s: 'google.com', c: 'IN' });
+	expect((sqlite.query("SELECT first_touch_source s, country c FROM payment_records WHERE payment_id = 'dodo_pay_abc123'").get() as any)).toEqual({ s: 'google.com', c: 'IN' });
 
 	expect(await (await send('refund.succeeded', { refund_id: 'ref_1', payment_id: 'pay_abc123', is_partial: true })).json()).toMatchObject({ ignored: true });
 	expect(payment(sqlite, 'dodo_pay_abc123').status).toBe('succeeded');
@@ -1280,12 +1311,13 @@ test('Dodo Payments: signed payment attributed via metadata, tax and fee taken o
 	expect(payment(sqlite, 'dodo_pay_abc123').status).toBe('refunded');
 });
 
-test('footer link: free installs lock a site until its homepage links to grosslytics.com; daily recheck relocks', async () => {
+test('footer link: free installs accept qualified links and relock when the link is removed', async () => {
 	const { requireFooter } = await import('./footer.js');
 	const realFetch = globalThis.fetch;
-	let html = '<footer><a href="https://grosslytics.com" rel="nofollow">Powered by Grosslytics</a><a href="https://grosslytics.com/"></a><a href="https://evil.com/grosslytics.com">Grosslytics</a></footer>';
+	let html = '<footer><a href="https://grosslytics.com/"></a><a href="https://example.com/grosslytics.com">Grosslytics</a></footer>';
 	let down = false;
 	globalThis.fetch = (async (url: string) => {
+		if (String(url).startsWith('https://cloudflare-dns.com/dns-query?')) return Response.json({ Status: 0, Answer: [{ type: 1, data: '1.1.1.1' }] });
 		expect(String(url)).toBe('https://acme.io/');
 		return down ? new Response('', { status: 503 }) : new Response(html, { headers: { 'content-type': 'text/html' } });
 	}) as any;
@@ -1322,19 +1354,23 @@ test('footer link: free installs lock a site until its homepage links to grossly
 		expect(sites.map((s: any) => s.locked)).toEqual([true, false]);
 		expect((await call('/api/stats/dashboard?siteId=s2')).status).toBe(200);
 
-		// nofollow, an empty link and a look-alike host don't count
+		// An empty link and a look-alike host don't count
 		expect((await verify()).status).toBe(422);
 		down = true;
 		expect(((await (await verify()).json()) as any).error).toContain('Could not load');
 		down = false;
-		html = '<footer><a class="x" href="https://www.grosslytics.com/?ref=acme" rel="noopener">Powered by <b>Grosslytics</b></a></footer>';
-		expect((await verify()).status).toBe(200);
+		for (const rel of ['noopener', 'sponsored', 'nofollow noopener']) {
+			html = `<footer><a class="x" href="https://www.grosslytics.com/?ref=acme" rel="${rel}">Powered by <b>Grosslytics</b></a></footer>`;
+			expect((await verify()).status).toBe(200);
+		}
 		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(200);
 		expect((await call('/api/share/acme.io')).status).toBe(200);
 		expect(((await (await call('/api/stats/sites')).json()) as any).sites[0].locked).toBe(false);
 
-		// A day later the link is looked for again: a site that is down keeps access, a removed link locks it
+		// The daily check keeps access with a qualified link or a temporary outage and relocks if the link is removed
 		const age = () => sqlite.exec('UPDATE site_footer SET checked_at = checked_at - 90000');
+		age();
+		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(200);
 		age();
 		down = true;
 		expect((await call('/api/stats/dashboard?siteId=s1')).status).toBe(200);
@@ -1345,5 +1381,273 @@ test('footer link: free installs lock a site until its homepage links to grossly
 		expect(sqlite.query('SELECT COUNT(*) n FROM site_footer').get()).toEqual({ n: 0 });
 	} finally {
 		globalThis.fetch = realFetch;
+	}
+});
+
+test('security: unknown and inherited gateways fail closed before reading any credential', async () => {
+	const app = makeApp();
+	for (const gateway of ['constructor', 'toString', '__proto__', 'valueOf', 'unknown']) {
+		const response = await app.fetch(`/api/webhooks/${gateway}?siteId=s1`, { method: 'POST', body: '{}' });
+		expect(response.status).toBe(404);
+		expect(await verifyWebhook(gateway as any, 'secret', '{}', new Headers())).toBe(false);
+	}
+	expect(app.sqlite.query('SELECT COUNT(*) n FROM payment_records').get()).toEqual({ n: 0 });
+	const body = JSON.stringify({ id: 'evt_ping', type: 'ping' });
+	app.sqlite.exec("INSERT INTO sites (site_id, domain, name) VALUES ('s2', 'other.io', 'Other')");
+	expect((await app.fetch('/api/webhooks/stripe?siteId=s2', { method: 'POST', body, headers: await stripeHeaders(body) })).status).toBe(401);
+});
+
+test('security: webhook secrets are encrypted, bound to their site and gateway, and migrated idempotently', async () => {
+	const app = makeApp();
+	const env = { DB: app.d1, SITE_SECRETS_KEY: 'ab'.repeat(32) } as Bindings;
+	const first = await encryptSiteSecret(env, 's1', 'stripe', SECRET);
+	const second = await encryptSiteSecret(env, 's1', 'stripe', SECRET);
+	expect(first).not.toBe(second);
+	expect(first).not.toContain(SECRET);
+	expect(await readSiteSecret(env, 's1', 'stripe', first)).toBe(SECRET);
+	await expect(readSiteSecret(env, 's2', 'stripe', first)).rejects.toThrow();
+	await expect(readSiteSecret(env, 's1', 'paddle', first)).rejects.toThrow();
+	await expect(readSiteSecret({ ...env, SITE_SECRETS_KEY: 'cd'.repeat(32) }, 's1', 'stripe', first)).rejects.toThrow();
+	app.sqlite.prepare('INSERT INTO site_secrets VALUES (?, ?, ?)').run('s1', 'stripe', SECRET);
+	await migrateSiteSecrets(env);
+	const stored = () => (app.sqlite.query('SELECT secret FROM site_secrets').get() as any).secret;
+	const migrated = stored();
+	expect(migrated).toMatch(/^aes-gcm:v1:/);
+	expect(await readSiteSecret(env, 's1', 'stripe', migrated)).toBe(SECRET);
+	await migrateSiteSecrets(env);
+	expect(stored()).toBe(migrated);
+	const missingKey = makeApp({ SITE_SECRETS_KEY: undefined });
+	expect((await missingKey.fetch('/api/stats/sites/s1/secrets', {
+		method: 'POST', headers: { ...bearer, 'content-type': 'application/json' },
+		body: JSON.stringify({ gateway: 'stripe', secret: SECRET }),
+	})).status).toBe(503);
+});
+
+test('security: live tickets are site-scoped, one-use, and tied to revocable credentials', async () => {
+	const app = makeApp();
+	const env = { DB: app.d1, API_TOKEN: 'tok' } as Bindings;
+	const queryToken = await app.fetch('/api/stats/sites?token=tok');
+	expect(queryToken.status).toBe(401);
+	const issue = async (headers = bearer) => (await (await app.fetch('/api/stats/live-ticket?siteId=s1', { headers })).json()) as { ticket: string };
+	const request = (ticket: string) => new Request('https://acme.io/api/stats/live?siteId=s1', {
+		headers: { upgrade: 'websocket', 'sec-websocket-protocol': `grosslytics-live, ${ticket}` },
+	});
+	const master = await issue();
+	expect(JSON.stringify(app.sqlite.query('SELECT * FROM live_tickets').all())).not.toContain(master.ticket);
+	expect(await redeemLiveTicket(env, request(master.ticket), 'other')).toBeNull();
+	expect(await redeemLiveTicket(env, request(master.ticket), 's1')).toMatchObject({ kind: 'master', siteId: 's1' });
+	expect(await redeemLiveTicket(env, request(master.ticket), 's1')).toBeNull();
+
+	const tokenResponse = await app.fetch('/api/stats/tokens', {
+		method: 'POST', headers: { ...bearer, 'content-type': 'application/json' },
+		body: JSON.stringify({ siteId: 's1', name: 'reader' }),
+	});
+	const token = await tokenResponse.json() as { token: string; id: string };
+	const grant = { siteId: 's1', kind: 'pat' as const, hash: await hashToken(token.token) };
+	const issued = await issue({ authorization: `Bearer ${token.token}` });
+	expect(await liveAuthorized(env, grant)).toBe(true);
+	await app.fetch(`/api/stats/tokens/${token.id}/revoke`, { method: 'POST', headers: bearer });
+	expect(await liveAuthorized(env, grant)).toBe(false);
+	expect(await redeemLiveTicket(env, request(issued.ticket), 's1')).toBeNull();
+
+	const owner = 'owner-session';
+	app.sqlite.prepare('INSERT INTO sessions VALUES (?, unixepoch() + 900)').run(await hashToken(owner));
+	const ownerGrant = { siteId: 's1', kind: 'owner' as const, hash: await hashToken(owner) };
+	expect(await liveAuthorized(env, ownerGrant)).toBe(true);
+	await app.fetch('/api/auth/logout', { method: 'POST', headers: { cookie: `gl_session=${owner}` } });
+	expect(await liveAuthorized(env, ownerGrant)).toBe(false);
+	const expired = await issue();
+	app.sqlite.exec('UPDATE live_tickets SET expires_at = 1');
+	expect(await redeemLiveTicket(env, request(expired.ticket), 's1')).toBeNull();
+});
+
+test('security: domain publication requires DNS proof and prevents competing claims', async () => {
+	const app = makeApp({ CLOUD: '1' });
+	const original = globalThis.fetch;
+	const proof = { value: '"s1"' };
+	globalThis.fetch = (async (url: string) => {
+		const parsed = new URL(url);
+		expect(parsed.origin).toBe('https://cloudflare-dns.com');
+		expect(parsed.searchParams.get('name')).toBe('_grosslytics.acme.io');
+		return Response.json({ Status: 0, Answer: [{ type: 16, data: proof.value }] });
+	}) as any;
+	const publish = (site: string, enabled = true) => app.fetch(`/api/stats/sites/${site}/share`, {
+		method: 'POST', headers: { ...bearer, 'content-type': 'application/json' }, body: JSON.stringify({ enabled }),
+	});
+	try {
+		expect((await app.fetch('/api/share/acme.io')).status).toBe(404);
+		proof.value = '"wrong-site"';
+		expect((await publish('s1')).status).toBe(422);
+		proof.value = '"s1"';
+		expect((await publish('s1')).status).toBe(200);
+		expect((await app.fetch('/api/share/acme.io')).status).toBe(200);
+		app.sqlite.exec("INSERT INTO sites (site_id, domain, name) VALUES ('s2', 'acme.io', 'Another')");
+		proof.value = '"s2"';
+		expect((await publish('s2')).status).toBe(409);
+		expect((await publish('s1', false)).status).toBe(200);
+		expect((await app.fetch('/api/share/acme.io')).status).toBe(404);
+		expect((await publish('s2')).status).toBe(200);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test('security: production ingestion needs origin and rate limits and redacts stored paths', async () => {
+	let sourceAllowed = true;
+	let siteAllowed = true;
+	const sent: EnrichedEvent[] = [];
+	const app = makeApp({
+		ENVIRONMENT: 'production',
+		INGEST_QUEUE: { send: async (event: EnrichedEvent) => void sent.push(event) },
+		INGEST_SOURCE_LIMITER: { limit: async () => ({ success: sourceAllowed }) },
+		INGEST_SITE_LIMITER: { limit: async () => ({ success: siteAllowed }) },
+	});
+	const body = JSON.stringify({
+		sid: 's1', vid: 'v1', ses: 'ss', t: 'pageview',
+		n: '/reset-password/abcdefghijklmnopqrstuvwxyz', src: '', ref: 'https://acme.io/path?token=private', sd: 0, dur: 0,
+	});
+	const post = (origin: string) => app.fetch('/api/event', {
+		method: 'POST', headers: { origin, 'user-agent': 'Mozilla/5.0 Chrome/130 Safari/537.36' }, body,
+	});
+	expect((await post('')).status).toBe(403);
+	expect((await post('https://localhost')).status).toBe(403);
+	expect((await post('https://attacker.io')).status).toBe(403);
+	expect((await post('https://acme.io')).status).toBe(202);
+	expect(sent).toHaveLength(1);
+	expect(sent[0]).toMatchObject({ n: '/reset-password/:redacted', ref: 'acme.io' });
+	siteAllowed = false;
+	expect((await post('https://acme.io')).status).toBe(202);
+	expect(sent).toHaveLength(1);
+	sourceAllowed = false;
+	expect((await post('https://acme.io')).status).toBe(429);
+});
+
+test('security: payment migrations preserve legacy data once and duplicate IDs stay isolated', async () => {
+	const { applyPaymentEvent } = await import('@grosslytics/db-d1');
+	const app = makeApp();
+	app.sqlite.exec("DELETE FROM security_migrations; INSERT INTO payments (payment_id, site_id, gateway, gross_amount_cents, net_amount_cents, status) VALUES ('legacy', 's1', 'stripe', 100, 90, 'refunded'); INSERT INTO refunds VALUES ('legacy', 's1', 1000)");
+	app.sqlite.exec(MIGRATION_014_SECURITY);
+	expect(app.sqlite.query("SELECT status FROM payment_records WHERE payment_id = 'legacy'").get()).toEqual({ status: 'refunded' });
+	expect(app.sqlite.query("SELECT gateway FROM payment_refunds WHERE payment_id = 'legacy'").get()).toEqual({ gateway: 'stripe' });
+	app.sqlite.exec("DELETE FROM payment_records WHERE payment_id = 'legacy'; DELETE FROM payment_refunds WHERE payment_id = 'legacy'");
+	app.sqlite.exec(ALL_MIGRATIONS);
+	expect(app.sqlite.query("SELECT COUNT(*) n FROM payment_records WHERE payment_id = 'legacy'").get()).toEqual({ n: 0 });
+	app.sqlite.exec("INSERT INTO payments (payment_id, site_id, gateway, gross_amount_cents, net_amount_cents, status) VALUES ('in-flight', 's1', 'stripe', 100, 90, 'succeeded')");
+	expect(app.sqlite.query("SELECT status FROM payment_records WHERE payment_id = 'in-flight'").get()).toEqual({ status: 'succeeded' });
+	app.sqlite.exec("UPDATE payment_records SET status = 'refunded' WHERE payment_id = 'in-flight'; UPDATE payments SET status = 'succeeded' WHERE payment_id = 'in-flight'");
+	expect(app.sqlite.query("SELECT status FROM payment_records WHERE payment_id = 'in-flight'").get()).toEqual({ status: 'refunded' });
+
+	for (const [siteId, gateway] of [['s1', 'stripe'], ['s2', 'stripe'], ['s1', 'paddle']] as const) {
+		const payment = {
+			paymentId: 'duplicate', siteId, gateway, grossAmountCents: 1000, feeAmountCents: 50, netAmountCents: 950,
+			currency: 'usd', status: 'succeeded' as const, isRenewal: false, firstTouchSource: 'x', lastTouchSource: 'x', timeToConvertHours: 0, buyerReadSec: 0, buyerScrollPct: 0,
+		};
+		expect(await applyPaymentEvent(app.d1, { id: 'event1', siteId, gateway, references: ['duplicate'], payment })).toMatchObject({ inserted: true });
+	}
+	expect(app.sqlite.query("SELECT COUNT(*) n FROM payment_records WHERE payment_id = 'duplicate'").get()).toEqual({ n: 3 });
+	await applyPaymentEvent(app.d1, { id: 'refund1', siteId: 's1', gateway: 'stripe', references: ['duplicate'], refundedAt: 2000 });
+	expect(app.sqlite.query("SELECT site_id, gateway, status FROM payment_records WHERE payment_id = 'duplicate' ORDER BY site_id, gateway").all()).toEqual([
+		{ site_id: 's1', gateway: 'paddle', status: 'succeeded' }, { site_id: 's1', gateway: 'stripe', status: 'refunded' }, { site_id: 's2', gateway: 'stripe', status: 'succeeded' },
+	]);
+});
+
+test('security: email verification is required and neither signup nor claim exposes a license or email', async () => {
+	const app = makeApp();
+	const original = globalThis.fetch;
+	const messages: { to: string; body: string }[] = [];
+	globalThis.fetch = (async (url: string, init: RequestInit) => {
+		expect(url).toBe('https://next-api.useplunk.com/v1/send');
+		messages.push(JSON.parse(String(init.body)));
+		return Response.json({ id: 'email_test' });
+	}) as any;
+	try {
+		const cloud = makeApp({ CLOUD: '1' });
+		const post = (body: object) => cloud.fetch('/api/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+		expect((await post({ email: 'person@acme.io', password: 'correct horse' })).status).toBe(202);
+		expect(cloud.sqlite.query('SELECT COUNT(*) n FROM accounts').get()).toEqual({ n: 0 });
+		const code = messages.at(-1)!.body.match(/[a-f0-9]{40}/)![0];
+		expect(JSON.stringify(cloud.sqlite.query('SELECT * FROM email_proofs').all())).not.toContain(code);
+		expect((await post({ email: 'person@acme.io', password: 'correct horse', code: 'bad' })).status).toBe(400);
+		expect((await post({ email: 'person@acme.io', password: 'correct horse', code })).status).toBe(201);
+		const count = messages.length;
+		expect((await post({ email: 'person@acme.io', password: 'correct horse' })).status).toBe(202);
+		expect(messages).toHaveLength(count);
+		const publicKey = makeApp({ CLOUD: '1', PLUNK_API_KEY: 'pk_test' });
+		expect((await publicKey.fetch('/api/auth/signup', {
+			method: 'POST', headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ email: 'person@acme.io', password: 'correct horse' }),
+		})).status).toBe(503);
+
+		app.sqlite.prepare('INSERT INTO licenses (key_hash, session_id, email) VALUES (?, ?, ?)').run('hash', 'pay_license_12345678', 'buyer@acme.io');
+		const claimApp = makeApp({ LICENSE_SECRET: 'license-secret' });
+		claimApp.sqlite.exec("INSERT INTO licenses (key_hash, session_id, email) VALUES ('hash', 'pay_license_12345678', 'buyer@acme.io')");
+		const response = await claim(claimApp, 'pay_license_12345678');
+		expect(response.status).toBe(202);
+		expect(await response.json()).toEqual({ verifyEmail: true });
+		expect((await claimApp.fetch('/api/license/claim?payment_id=pay_license_12345678')).status).toBe(404);
+		const licenseCode = messages.at(-1)!.body.match(/[a-f0-9]{40}/)![0];
+		expect(await (await claim(claimApp, 'pay_license_12345678', licenseCode)).json()).toEqual({ key: expect.stringMatching(/^gl_lic_/) });
+		expect((await claim(claimApp, 'pay_license_12345678', licenseCode)).status).toBe(400);
+	} finally {
+		globalThis.fetch = original;
+	}
+});
+
+test('security: stale billing events cannot restore canceled subscriptions or refunded licenses', async () => {
+	const app = makeApp({ CLOUD: '1', STRIPE_BILLING_WEBHOOK_SECRET: SECRET, CLOUD_STRIPE_PAYMENT_LINK_ID: 'plink_cloud', LIFETIME_PAYMENT_LINK_ID: 'plink_life', LICENSE_SECRET: 'license-secret' });
+	app.sqlite.exec("INSERT INTO accounts (id, email, password_hash, trial_ends_at) VALUES ('account1', 'person@acme.io', 'hash', 1)");
+	const bill = async (type: string, object: object, created: number) => {
+		const body = JSON.stringify({ type, created, data: { object } });
+		return app.fetch('/api/billing/stripe', { method: 'POST', body, headers: await stripeHeaders(body) });
+	};
+	const checkout = { mode: 'subscription', payment_status: 'paid', payment_link: 'plink_cloud', client_reference_id: 'account1', subscription: 'sub1', customer: 'cus1' };
+	await bill('customer.subscription.deleted', { id: 'sub1' }, 200);
+	await bill('checkout.session.completed', checkout, 100);
+	const account = () => app.sqlite.query("SELECT status, stripe_subscription_id FROM accounts WHERE id = 'account1'").get();
+	expect(account()).toEqual({ status: 'canceled', stripe_subscription_id: 'sub1' });
+	await bill('customer.subscription.updated', { id: 'sub1', status: 'active' }, 199);
+	expect(account()).toEqual({ status: 'canceled', stripe_subscription_id: 'sub1' });
+	await bill('checkout.session.completed', { ...checkout, subscription: 'sub2' }, 300);
+	await bill('customer.subscription.updated', { id: 'sub1', status: 'active' }, 400);
+	expect(account()).toEqual({ status: 'active', stripe_subscription_id: 'sub2' });
+	await bill('checkout.session.completed', { ...checkout, subscription: 'sub3', payment_link: 'wrong' }, 500);
+	expect(account()).toEqual({ status: 'active', stripe_subscription_id: 'sub2' });
+
+	const session = { id: 'cs_license_12345678', mode: 'payment', payment_status: 'paid', payment_link: 'plink_life', payment_intent: 'pi1', customer_details: { email: 'person@acme.io' } };
+	await bill('charge.refunded', { refunded: true, payment_intent: 'pi1' }, 200);
+	await bill('checkout.session.completed', session, 100);
+	const { licenseKey } = await import('./routes/license.js');
+	const key = await licenseKey('license-secret', session.id);
+	expect((await app.fetch('/api/license/download', { headers: { authorization: `Bearer ${key}` } })).status).toBe(401);
+	expect((await claim(app, session.id)).status).toBe(404);
+});
+
+test('security: footer fetch refuses private DNS, unsafe redirects and oversized pages', async () => {
+	const original = globalThis.fetch;
+	let ip = '127.0.0.1';
+	let page = '';
+	let redirect = '';
+	const fetched: string[] = [];
+	globalThis.fetch = (async (input: string, init: RequestInit) => {
+		const url = String(input);
+		if (url.startsWith('https://cloudflare-dns.com/')) return Response.json({ Status: 0, Answer: [{ type: 1, data: ip }] });
+		fetched.push(url);
+		expect(init.redirect).toBe('manual');
+		if (redirect) return new Response(null, { status: 302, headers: { location: redirect } });
+		return new Response(page, { headers: { 'content-type': 'text/html' } });
+	}) as any;
+	try {
+		expect(await checkFooter('localhost')).toBe('unreachable');
+		expect(await checkFooter('acme.io')).toBe('unreachable');
+		expect(fetched).toHaveLength(0);
+		ip = '1.1.1.1';
+		redirect = 'https://127.0.0.1/';
+		expect(await checkFooter('acme.io')).toBe('unreachable');
+		expect(fetched).toEqual(['https://acme.io/']);
+		redirect = '';
+		page = 'x'.repeat(512 * 1024 + 1);
+		expect(await checkFooter('acme.io')).toBe('unreachable');
+	} finally {
+		globalThis.fetch = original;
 	}
 });
