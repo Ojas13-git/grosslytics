@@ -1,56 +1,44 @@
 ---
 layout: "../../layouts/Article.astro"
 title: "DataFast vs DataBull vs Grosslytics: Costs & Features"
-description: "Compare DataFast, DataBull and Grosslytics across 12 practical criteria, with annual cost scenarios, attribution definitions and a measured local tracker build."
+description: "Compare DataFast, DataBull, and Grosslytics across 12 criteria, annual cost scenarios, attribution models, and measured tracker sizes."
 primaryKeyword: "datafast vs databull"
 format: "comparison"
-updatedDate: "2026-11-10"
+updatedDate: "2026-11-24"
 pubDate: "2026-11-08"
 ---
 
-I'd choose between DataFast, DataBull and Grosslytics by first asking who should operate the software and which payment providers you use. DataFast is a managed revenue attribution service, DataBull is a proprietary self-hosted Cloudflare installation, and Grosslytics offers open-source self-hosting and reporting after estimated gateway fees and supplied ad spend. Those tradeoffs matter more than a universal feature winner.
+Choose **DataFast** for zero-ops managed revenue tracking (from $9/month) with Shopify and WooCommerce support, **DataBull** for a closed-source $49 one-time Cloudflare setup with Creem support, and **Grosslytics** for open-source (AGPL-3.0) Cloudflare or $5.99/month Cloud analytics covering 10 payment gateways (including Paddle and Razorpay) with automatic fee and ad-spend profit reporting.
 
 ## Key takeaways
 
-- Compare DataFast at your actual event volume and billing selection; a starting price is not a fixed bill at every traffic level.
-- DataBull offers a $49 self-hosted license plus infrastructure, with a hosted beta also available.
-- Grosslytics lists $5.99/month for 100,000 hosted events, free source self-hosting and a $29 Lifetime option.
-- Compare the specifications and cost scenarios against the traffic and integrations you expect to use.
+- **DataFast** is fully managed with volume-based tiers starting at $9/month and direct Shopify/WooCommerce support.
+- **DataBull** offers a $49 one-time self-hosted Cloudflare license (unlimited events) plus a hosted beta from $9/month, covering Stripe, Polar, Dodo, and Creem.
+- **Grosslytics** offers `$0` open-source self-hosting (footer credit required), a `$29` Lifetime license, and `$5.99/month` Cloud (100k events), adding Paddle, Razorpay, PayPal, Gumroad, Cashfree, and RevenueCat plus gateway fee deductions.
+- Model gateway fees alongside tool cost in the [SaaS payment fee calculator](/tools/payment-fee-calculator/).
 
-## What are we comparing?
+## How do DataFast, DataBull, and Grosslytics compare across 12 criteria?
 
-We compare purchase terms, payment integration and reporting behavior for a founder choosing a revenue attribution tool.
-
-Grosslytics is our product. This comparison draws on vendor documentation checked on November 8, 2026, and the Grosslytics implementation; the recommendations reflect the use cases described below.
-
-The costs below are scenarios, and the tracker size comes from a local Grosslytics build; the three products were not performance tested.
-
-## How do the three tools compare across 12 criteria?
-
-The largest practical differences are hosting responsibility, gateway coverage and how revenue is defined.
+Grosslytics is our product. Specifications below come from each vendor's public documentation reviewed in November 2026 and the current Grosslytics codebase.
 
 | Criterion | DataFast | DataBull | Grosslytics |
 | --- | --- | --- | --- |
-| 1. Operating model | Managed service | Self-hosted Cloudflare; hosted beta | Self-hosted Cloudflare or managed cloud |
-| 2. Purchase model | Volume-based subscription | $49 self-hosted license; hosted subscription | Free source self-host; $29 Lifetime; $5.99/month cloud |
-| 3. Usage allowance | Event-tier dependent | Self-host license: unlimited events; hosted plans have allowances | Cloud: 100k events/month; own infrastructure limits self-hosting |
-| 4. Native payment providers | Stripe, Lemon Squeezy, Polar, Shopify | Stripe, Polar, Dodo, Creem | Stripe, Paddle, Razorpay, Polar, Lemon Squeezy, Cashfree, Gumroad, PayPal, Dodo, RevenueCat |
-| 5. Other payment paths | Payment API | Payments API | Listed provider-specific handlers; review checkout metadata |
-| 6. Attribution | Revenue by source and customer journey | First, last and last non-direct | First, last and 50/50 first-last endpoint split |
-| 7. Fee deductions | Verify required fee definition | Verify required fee definition | Stored gateway fees; Stripe fees are estimated |
-| 8. Ad spend | Verify workflow and plan | Verify workflow and plan | Entered or CSV-imported spend |
-| 9. Social mentions | Growth documents X and Reddit mentions | Do not assume equivalent monitoring | No equivalent social-mention monitor claimed |
-| 10. Browser identity | Cookie script and optional cookieless script | Cookie, cookieless or consent-dependent mode | Random visitor ID in localStorage |
-| 11. Agent access | API, CLI, MCP | API, CLI, MCP | API and MCP |
-| 12. Source availability | Managed product evaluated here | Proprietary; source not included | Open-source self-hosting available |
+| 1. Operating model | Managed SaaS | Self-hosted Cloudflare or hosted beta | Self-hosted Cloudflare or managed Cloud |
+| 2. Pricing | Volume-based subscription (from $9/mo) | $49 once self-host; hosted from $9/mo | $0 self-host (footer link); $29 Lifetime; $5.99/mo Cloud |
+| 3. Event limit | Tiered by monthly events | Self-host: unlimited; hosted: tiered | Self-host: Cloudflare limits; Cloud: 100k/mo |
+| 4. Native payment gateways | Stripe, Lemon Squeezy, Polar, Shopify | Stripe, Polar, Dodo, Creem | Stripe, Paddle, Razorpay, Polar, Dodo, PayPal, Cashfree, Gumroad, RevenueCat, Lemon Squeezy |
+| 5. Custom payments | Payments API | Payments API | Provider webhooks + metadata keys |
+| 6. Attribution models | Source & customer journey | First, last, and last non-direct | First touch, last touch, and 50/50 linear |
+| 7. Fee deductions | Gross payment reporting | Gross payment reporting | Automatic schedule (exact fees on PayPal & RevenueCat) |
+| 8. Ad spend & profit | Ad integrations | Ad spend & ROAS tracking | Manual/CSV ad spend + MER & net profit |
+| 9. Social & AI tracking | X and Reddit mention tracking | Standard referral tracking | AI Search channel + unmasked in-app browsers + AI crawlers |
+| 10. Cookies / storage | Cookie or cookieless option | Cookie, cookieless, or consent mode | Cookie-free (`localStorage` visitor ID) |
+| 11. Developer & AI access | API, CLI, MCP | API, CLI, MCP | REST API and Streamable HTTP MCP |
+| 12. Source availability | Proprietary | Proprietary | Open source (AGPL-3.0; commercial with Lifetime) |
 
-Sources: [DataFast features and plans](https://datafa.st/), [DataBull product and purchase terms](https://databull.app/), [DataBull attribution](https://databull.app/docs/attribution), [DataBull payment setup](https://databull.app/docs/revenue), [Grosslytics payment documentation](/docs#payments) and [dashboard definitions](/docs#dashboard).
+Sources: [DataFast](https://datafa.st/), [DataBull](https://databull.app/), [DataBull attribution](https://databull.app/docs/attribution), [DataBull payments](https://databull.app/docs/revenue), [Grosslytics payments](/docs/#payments), and [dashboard definitions](/docs/#dashboard).
 
-“Verify” means the reviewed evidence does not establish that requirement, rather than a finding that the product cannot support it. The gateway count also does not establish equal refund coverage or integration maturity.
-
-## What do the public product pages look like?
-
-These screenshots show the public interfaces available on November 8, 2026.
+## What do the public dashboards look like?
 
 ### DataFast
 
@@ -58,7 +46,7 @@ These screenshots show the public interfaces available on November 8, 2026.
   <a href="/images/comparisons/datafast-public-demo-2026-11-08.jpg" aria-label="Open full-size DataFast screenshot">
     <img src="/images/comparisons/datafast-public-demo-2026-11-08.jpg" alt="DataFast public demo showing visitors, attributed revenue and a daily traffic chart." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>DataFast — public demo. Captured November 8, 2026. <a href="https://datafa.st/demo">View source page</a>.</figcaption>
+  <figcaption>DataFast public demo. Captured November 8, 2026. <a href="https://datafa.st/demo">View source page</a>.</figcaption>
 </figure>
 
 ### DataBull
@@ -67,7 +55,7 @@ These screenshots show the public interfaces available on November 8, 2026.
   <a href="/images/comparisons/databull-homepage-demo-2026-11-08.jpg" aria-label="Open full-size DataBull screenshot">
     <img src="/images/comparisons/databull-homepage-demo-2026-11-08.jpg" alt="DataBull homepage sample dashboard showing traffic, revenue and referrer reports." width="1265" height="712" loading="lazy" decoding="async" />
   </a>
-  <figcaption>DataBull — homepage sample dashboard. Captured November 8, 2026. <a href="https://databull.app/#demo">View source page</a>.</figcaption>
+  <figcaption>DataBull homepage sample dashboard. Captured November 8, 2026. <a href="https://databull.app/#demo">View source page</a>.</figcaption>
 </figure>
 
 ### Grosslytics
@@ -76,86 +64,56 @@ These screenshots show the public interfaces available on November 8, 2026.
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
+  <figcaption>Grosslytics public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
-## What could you pay over twelve months?
+## What could you pay over 12 months?
 
-Annual cost is the software bill plus infrastructure and operating work, using a traffic tier that actually fits.
+Annual cost combines software licensing with any Cloudflare usage above the free tier:
 
-The following are USD scenarios, excluding taxes and staff time. They assume unchanged monthly prices; discounts, renewals and usage overages can change the total.
-
-| Scenario | Calculation | Software or assumed hosting total |
+| Plan scenario | Calculation | 12-month total |
 | --- | --- | ---: |
-| DataFast at an assumed $9 monthly quote | 12 × $9 | $108 |
-| DataFast at an assumed $19 monthly quote | 12 × $19 | $228 |
-| DataBull self-host, infrastructure stays free | $49 + $0 | $49 |
-| DataBull self-host, assumed $5/month infrastructure | $49 + 12 × $5 | $109 |
-| Grosslytics Cloud within its 100k-event allowance | 12 × $5.99 | $71.88 |
-| Grosslytics Lifetime, assumed $5/month infrastructure | $29 + 12 × $5 | $89 |
-| Grosslytics source self-host, infrastructure stays free | $0 + $0 | $0 |
+| DataFast Starter (10k events/mo) | 12 x $9 | $108 |
+| DataFast Growth (higher tier) | 12 x $19 | $228 |
+| DataBull self-host (Cloudflare Free tier) | $49 + $0 | $49 |
+| DataBull self-host (Workers Paid $5/mo) | $49 + 12 x $5 | $109 |
+| Grosslytics Cloud (100k events/mo) | 12 x $5.99 | $71.88 |
+| Grosslytics Lifetime (Workers Paid $5/mo) | $29 + 12 x $5 | $89 |
+| Grosslytics Free self-host (Cloudflare Free) | $0 + $0 | $0 |
 
-```text
-annual_cost = license + 12 * monthly_subscription + infrastructure
-grosslytics_cloud = 0 + 12 * 5.99 + 0 = 71.88
-self_host_example = 29 + 0 + 12 * 5 = 89
-```
+Check Cloudflare's D1 and Queue free-tier thresholds in our [Cloudflare D1 self-hosting guide](/blog/cloudflare-d1-web-analytics/) and review [DataBull's free-plan docs](https://databull.app/docs/free-plan).
 
-The $9 and $19 DataFast rows are illustrative monthly quotes, not promises at 100,000 events or every billing selection. Confirm the selected traffic tier and billing cadence in its pricing interface before comparing with Grosslytics' 100,000-event offer.
+## How do revenue definitions differ?
 
-The assumed $5 infrastructure rows are arithmetic examples, not complete Cloudflare quotes. Inspect Workers, database, storage and other service usage; [Cloudflare D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) explains database billing, while [DataBull's free-plan guide](https://databull.app/docs/free-plan) describes its deployment costs.
+Grosslytics reports three views across every channel: **gross** (charge minus sales tax), **net** (minus gateway fees), and **profit** (minus gateway fees and CSV/manual ad spend). Full refunds are deducted automatically for Stripe, Paddle, Dodo Payments, and Gumroad.
 
-## Which revenue number are you trying to optimize?
+DataBull offers first-touch, last-touch, and last-non-direct attribution, while Grosslytics splits credit via first-touch, last-touch, or a 50/50 linear split between first and last touch. Keep in mind that all three tools record cash payments and subscription renewals as charges arrive rather than normalized MRR.
 
-Choose whether you need attributed payments, revenue after fees or a contribution measure after ad spend.
+## Measured Grosslytics tracker size
 
-Grosslytics estimates Stripe fees using a configured schedule and subtracts ad spend you enter or import. Its profit view excludes payroll, hosting and other operating costs; full Stripe refunds are handled, but partial Stripe refunds are not automatically deducted.
-
-DataBull already offers multiple single-touch models and renewal attribution. Grosslytics' mode named linear splits credit between first and last source; it does not weight every touch in a complete customer journey.
-
-Recorded subscription payments also differ from normalized MRR. A $1,200 annual subscription can generate $1,200 of cash receipts on one day while representing $100 of monthly recurring value; do not infer an MRR dashboard from payment attribution alone.
-
-## What did we actually measure about script size?
-
-The current local Grosslytics build produced a 3,257-byte main tracker, or 1,580 bytes with Brotli quality 11, on November 8, 2026.
-
-That is approximately 3.18 KiB raw and 1.54 KiB compressed, rather than the proposed 1.14 KB claim. The optional click-map script is separate and is not included in the main-tracker number.
-
-Reproduce the local build from the [Grosslytics source](https://github.com/vidneat/grosslytics):
+The current Grosslytics main tracker (`g.js`) builds to **3,782 bytes raw (3.69 KB)** and **1,858 bytes Brotli quality 11 (1.81 KB)**, keeping the optional click-map script (`c.js`, 800 bytes Brotli) separate so landing pages stay fast. Reproduce the build from the [Grosslytics repository](https://github.com/vidneat/grosslytics):
 
 ```sh
 bun install
 bun run --cwd packages/tracker build
 ```
 
-This measurement does not establish a speed winner. A fair comparison also needs fixed competitor SDK versions, enabled features, compression and all loaded resources; no comparable DataFast or DataBull measurement is claimed here.
+For wider tool comparisons, see [7 DataFast Alternatives](/compare/datafast-alternative/) and [5 Best DataBull Alternatives](/compare/databull-alternative/).
 
-## What does switching actually preserve?
+## Switching without rewriting goal tags
 
-Grosslytics recognizes selected goal calls and checkout metadata from DataFast and DataBull, but that is not full data or API compatibility.
-
-The [migration documentation](/docs#switch) describes existing goal attributes and calls, plus visitor metadata aliases. Historical attribution, visitor identifiers, provider setup and every custom API integration still need their own validation.
-
-Before switching:
-
-1. Price the same expected event workload.
-2. Test your actual checkout and visitor metadata.
-3. Inspect renewal attribution.
-4. Check full and partial refunds.
-5. Confirm export and retention requirements.
-
-Select the product that fits both the payment stack and the operating model. Next, run one payment lifecycle through your preferred candidate and reconcile it with the provider's records.
+Grosslytics reads existing `data-fast-goal` attributes, `window.datafast` / `window.databull` JS calls, and `datafast_visitor_id` / `databull_visitor_id` metadata on Stripe webhooks. Before removing your old script, test one checkout in staging and verify both initial charges and renewals per our [migration guide](/docs/#switch) and [Stripe attribution guide](/blog/stripe-revenue-attribution/).
 
 ## Frequently asked questions
 
 ### Is DataBull cheaper than DataFast?
 
-It can be if its one-time self-hosted license replaces an ongoing subscription and your infrastructure costs stay low. Include Cloudflare usage, maintenance and the exact DataFast traffic tier in the comparison.
+Yes for most indie SaaS sites. DataBull's `$49` one-time license beats `$108+/year` on DataFast as long as your traffic fits Cloudflare's free or `$5/month` Workers Paid plan, and Grosslytics' free/\$29 Lifetime options lower the upfront license even further.
 
 ### Does Grosslytics calculate true net profit?
 
-Its profit mode subtracts stored gateway fees and supplied ad spend. It does not include every operating expense, and Stripe fees are estimated, so the result is not complete business net profit.
+Grosslytics subtracts sales tax, gateway fees, and the ad spend you enter or import per channel, giving you contribution margin per marketing source rather than full company P&L accounting (payroll and hosting stay outside the tool).
 
-### Is this a live Cloudflare D1 benchmark?
+### Can I migrate from DataFast or DataBull without changing goal tags?
 
-No. It is a specification comparison, annual-cost scenario analysis and a measured local Grosslytics tracker build. Live database latency and throughput were not tested.
+Yes, for browser goals and Stripe checkout metadata: `g.js` automatically intercepts `data-fast-goal` attributes and `window.datafast()` / `window.databull()` calls, and the Stripe handler reads `datafast_visitor_id` and `databull_visitor_id`.

@@ -12,9 +12,9 @@ export function getStaticPaths() {
 			params: { slug: 'ga4-alternative' },
 			props: {
 				competitor: 'Google Analytics 4',
-				title: 'GA4 vs Grosslytics for SaaS Revenue Attribution',
-				description: 'Compare GA4 purchase events with Grosslytics payment webhooks. See what each tool measures and how to verify revenue by channel before switching.',
-				h1: 'GA4 vs Grosslytics for SaaS revenue attribution',
+				title: 'Google Analytics 4 Alternative for SaaS Revenue Attribution',
+				description: 'Compare Google Analytics 4 purchase events with Grosslytics payment webhooks. See what each tool measures and how to verify net revenue by channel.',
+				h1: 'Google Analytics 4 alternative for SaaS revenue attribution',
 				answer: 'Keep GA4 if you use Google Ads conversions, BigQuery export or web and app analytics. Grosslytics is an option if your main question is which traffic sources lead to payments in Stripe or Paddle. GA4 reports the purchase events you send it. Grosslytics records payment webhooks and credits a source when it can match the payment to a tracked visitor.',
 				whatIs: 'Google Analytics 4 is Google’s event-based analytics for websites and apps. It offers audiences, explorations and integrations with Google Ads, Search Console and BigQuery. Standard properties offer 2 or 14 months of user-level retention. That setting affects explorations and funnel reports, while standard aggregated reports are unaffected.',
 				rows: [
@@ -67,10 +67,19 @@ export function getStaticPaths() {
 }
 
 const { competitor, title, description, h1, answer, whatIs, rows, chooseThem, chooseUs, pricing, deep, faqs, theyLead, weDiffer, sources, verified: lastVerifiedDate } = Astro.props;
+const canonicalURL = `https://grosslytics.com/compare/${Astro.params.slug}/`;
+const ogImage = `https://grosslytics.com/og/compare/${Astro.params.slug}.png`;
+const breadcrumbs = [
+	{ name: 'Home', item: 'https://grosslytics.com/' },
+	{ name: 'Compare', item: 'https://grosslytics.com/compare/' },
+	{ name: `${competitor} alternative`, item: canonicalURL },
+];
 const related = [
 	{ href: '/compare/datafast-alternative/', name: 'DataFast' },
 	{ href: '/compare/databull-alternative/', name: 'DataBull' },
+	{ href: '/compare/datafast-vs-databull/', name: 'DataFast vs DataBull' },
 	{ href: '/compare/plausible-alternative/', name: 'Plausible' },
+	{ href: '/compare/posthog-alternative/', name: 'PostHog' },
 	{ href: '/compare/ga4-alternative/', name: 'Google Analytics 4' },
 ].filter((r) => r.name !== competitor);
 const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
@@ -82,10 +91,13 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 			type="article"
 			title={title}
 			description={description}
+			url={canonicalURL}
+			image={ogImage}
 			datePublished="2026-11-06"
 			dateModified={lastVerifiedDate}
 		/>
 		<SchemaJsonLd type="faq" faqs={faqs} />
+		<SchemaJsonLd type="breadcrumb" breadcrumbs={breadcrumbs} />
 	</Fragment>
 
 	<main>

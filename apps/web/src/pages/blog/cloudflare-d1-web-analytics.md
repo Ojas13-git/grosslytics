@@ -5,86 +5,76 @@ description: "Deploy Grosslytics on Cloudflare Workers and D1 in five steps. Und
 primaryKeyword: "self hosted web analytics cloudflare d1"
 format: "how-to"
 visualReview: {"decision":"include-screenshots","reason":"Real Cloudflare D1 pricing documentation explains the database allowance; the real public Grosslytics demo illustrates the reporting interface with clearly identified sample data."}
-updatedDate: "2026-11-21"
+updatedDate: "2026-11-24"
 pubDate: "2026-11-08"
 ---
 
-I recommend starting a self-hosted Grosslytics deployment by checking the whole Cloudflare stack, not just Worker requests. You can use the source-build setup or a prebuilt release; Workers, D1, Queues and Durable Objects all have allowances that affect the cost. I'll walk you through sizing, deployment and checking that visits and payments connect.
+Deploy Grosslytics on your own Cloudflare account in five steps using `npx grosslytics@latest install --free` (or `bun run setup` from source), then check your Workers, D1, and Queues free-tier budgets before sending live traffic. Checking all four meters together ensures your self-hosted revenue analytics stack runs smoothly inside Cloudflare's allowances.
 
 ## Key takeaways
 
-- A free-tier infrastructure bill depends on all service limits, including the 500 MB limit for the deployment’s D1 database.
+- Monitor every Cloudflare service meter: Workers, D1 (500 MB per database on Free), Queues (10,000 operations/day), and Durable Objects.
 - Install the prebuilt free release with `npx grosslytics@latest install --free`, or build from source with `bun run setup`.
-- Queues can become the first limit: 10,000 free operations/day allow about 3,333 normal small messages before retries and other usage.
-- Validate browser events, queue persistence and signed test payments separately.
+- Queues are usually the first free-tier ceiling: 10,000 daily operations cover roughly 3,333 queued events per day before retries.
+- Verify browser events (`202 Accepted`), queue delivery, and one signed test payment before relying on reports.
 
-Cloudflare’s allowances below were checked on November 21, 2026. Compare the limits with your own workload before deploying.
+Cloudflare's allowances below were verified on November 21, 2026. Check your account usage if other Workers share the same account budgets.
 
 ## Step 1: Check whether your workload fits the free plan
 
-A $0 Cloudflare infrastructure bill is possible only while the entire deployment stays inside the applicable free allowances. The current stack uses a tracker, two Workers, D1, Queues and a SQLite-backed Durable Object for live presence.
+Grosslytics uses two Workers, a D1 SQLite database, a Queue with a dead-letter queue, and a SQLite-backed Durable Object (`SiteLiveHub`) for live visitor presence.
 
-| Component | Free allowance relevant to this setup | What to measure |
+| Component | Free allowance relevant to this setup | What to monitor |
 | --- | --- | --- |
-| Workers | 100,000 requests/day; 10 ms CPU time per invocation | API requests, dashboard execution and CPU usage across the account |
-| D1 | 5 million rows read/day and 100,000 rows written/day. Storage caps are 500 MB per database and 5 GB per account | Query scans, writes including indexes, and the size of `grosslytics-db` |
-| Queues | 10,000 standard operations/day | Each message’s write, read and delete operations, plus retries |
-| Durable Objects | 100,000 requests/day and 13,000 GB-s/day of duration; separate storage allowances | Presence updates, WebSockets, alarms, duration and storage |
+| Workers | 100,000 requests/day; 10 ms CPU time per invocation | API requests, dashboard queries, and CPU time |
+| D1 | 5M rows read/day, 100,000 rows written/day; 500 MB per database (5 GB account max) | Query row scans, index writes, and `grosslytics-db` size |
+| Queues | 10,000 standard operations/day | Write, read, and delete operations (3 per message) plus retries |
+| Durable Objects | 100,000 requests/day; 13,000 GB-s/day duration | Live presence updates and WebSocket connections |
 
-These are distinct meters, not interchangeable event allowances. Other applications on your account consume the same account-level budgets. Check the current [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [Queues pricing](https://developers.cloudflare.com/queues/platform/pricing/) and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) before deployment.
-
-D1 counts the rows a query scans. Indexes can reduce reads but add writes. A Free plan query also fails once you exhaust the relevant daily allowance. Grosslytics stores its events and payments in one database, so use the [500 MB per-database limit](https://developers.cloudflare.com/d1/platform/limits/) when planning capacity for that installation. A domain, optional license and your operating time are separate costs.
+Check current [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [Queues pricing](https://developers.cloudflare.com/queues/platform/pricing/), and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) before deploying high-traffic sites. Because Grosslytics stores visits and payments in one D1 database, plan around the [500 MB per-database cap](https://developers.cloudflare.com/d1/platform/limits/) and configure visit data retention under Settings if needed.
 
 <figure>
   <a href="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" aria-label="Open full-size Cloudflare D1 screenshot">
     <img src="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" alt="Cloudflare D1 billing table showing free daily reads, writes and total storage limits." width="1269" height="714" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Cloudflare’s public D1 pricing documentation shows the database allowance. This covers D1 only; the complete analytics stack also uses Workers, Queues and Durable Objects. Captured 2026-11-08. <a href="https://developers.cloudflare.com/d1/platform/pricing/#billing-metrics">Source: Cloudflare D1</a>.</figcaption>
+  <figcaption>Cloudflare's public D1 pricing documentation shows the database allowance. Captured 2026-11-08. <a href="https://developers.cloudflare.com/d1/platform/pricing/#billing-metrics">Source: Cloudflare D1</a>.</figcaption>
 </figure>
 
-### Work through an event budget before counting pageviews
+### Estimate your daily Queue operations first
 
-The collector sends one queue message per accepted analytics event when its queue binding is present. A normal message under 64 KB typically uses three operations: write, read and delete. Batching does not remove per-message operation charges.
-
-For an illustrative 2,000 accepted events/day:
+Each accepted browser event sends one Queue message, which consumes three standard operations (write, read, and delete):
 
 ```text
-Queue operations = 2,000 messages × 3 operations = 6,000/day
-Remaining queue allowance = 10,000 − 6,000 = 4,000/day
-Idealized queue ceiling = floor(10,000 ÷ 3) = 3,333 messages/day
+Queue operations = 2,000 events * 3 operations = 6,000/day
+Remaining queue allowance = 10,000 - 6,000 = 4,000/day
+Idealized free queue ceiling = floor(10,000 / 3) = 3,333 events/day
 ```
 
-This calculation excludes retries, dead-letter writes, larger messages and other queues. Use this as a starting estimate for sizing your workload. Pageviews, engagement updates and custom goals can each create events, so 2,000 events does not mean 2,000 visitors or pageviews. D1 writes and dashboard queries can reach their own limits first.
+Because pageviews, leave events (read time and scroll depth), and goal clicks each generate an event, 3,333 events correspond to roughly 1,000 to 1,500 pageviews/day. Above that traffic, Cloudflare's Workers Paid plan ($5/month base) lifts Queue and D1 ceilings.
 
-## Step 2: Prepare your account, hostname and install path
+## Step 2: Prepare your account and analytics hostname
 
-Use a Cloudflare account that owns your domain, an unused hostname such as `analytics.example.com`, and a current supported Node.js release. The CLI requires Node.js 22.12 or newer. Source builds require Node.js 22.23.4 or newer, Git and Bun. The current installer uses macOS/Linux commands; check compatibility before installing on Windows.
+Use a Cloudflare account that manages your domain, an unused subdomain such as `analytics.example.com`, and Node.js 22.12+ (or Node.js 22.23.4+, Git, and Bun for source builds).
 
-For a new Cloudflare account, open Workers & Pages once to initialize its workers.dev subdomain. Use a hostname with no existing A, AAAA or CNAME record; the custom-domain setup needs to attach that hostname. Choose the correct account when prompted.
+For a brand-new Cloudflare account, open **Workers & Pages** in the Cloudflare Dashboard once so your `workers.dev` subdomain initializes. Ensure `analytics.example.com` has no conflicting `A`, `AAAA`, or `CNAME` records before running the installer.
 
-## Step 3: Deploy the API, dashboard and database together
+## Step 3: Deploy the API, dashboard, and database
 
-Install the prebuilt free release from a dedicated directory:
+Run the CLI installer from a dedicated working directory:
 
 ```bash
 npx grosslytics@latest install --free
 ```
 
-Register the tracked website and verify the “Powered by Grosslytics” credit in its homepage footer. Use `npx grosslytics@latest install --lifetime` with a Lifetime license. For a custom build, follow the [source installation instructions](/docs/#self-host).
+For Lifetime licenses (no footer attribution link required), use `npx grosslytics@latest install --lifetime`. To build directly from a source checkout, follow the [source installation instructions](/docs/#self-host).
 
-Run `npx grosslytics@latest update` from the same directory for new releases. The dashboard and tracker update at their existing URLs.
+The installer prompts for your hostname, Cloudflare zone, and dashboard password, creates `grosslytics-db` and both queues, applies D1 migrations, and deploys the API and web Workers onto the same analytics hostname so `/api/*`, `/g.js`, and `/app` share one origin. Keep your generated `grosslytics-install` directory private and store the printed `API_TOKEN` in a password manager.
 
-The installer asks for your hostname, Cloudflare zone and dashboard password, then authenticates with Cloudflare as needed. It creates `grosslytics-db`, the ingest and dead-letter queues, applies the schema, deploys the API and web Workers, and sets the API token and owner password. Allow time for the download, authorization and domain activation.
-
-Keep both Workers on the analytics hostname: `analytics.example.com/api/*` must reach the API, while the web Worker serves the dashboard and tracker. The tracker normally sends events to the origin serving its script. Splitting those origins without configuring routing can produce a dashboard that loads but receives no visits. The [setup documentation](/docs/#self-host) covers the standard arrangement.
-
-Save the printed API token in a password manager. Keep the generated `grosslytics-install` folder private: its state contains installation details, including the license when used, and re-running from that folder targets the same installation. Worker names are fixed; the current installer rejects a different hostname when it detects an existing Grosslytics deployment in that account.
+To install new releases later, run `npx grosslytics@latest update` from that same folder (or `git pull && bun run setup` for source builds).
 
 ## Step 4: Add your site and install the tracker
 
-Open `https://analytics.example.com/app`, sign in with the owner password and add the domain you want to measure. Choose its reporting currency and copy the generated site ID and tracker snippet.
-
-For the standard same-origin deployment, the tag looks like this:
+Open `https://analytics.example.com/app`, sign in, and register the domain you want to track. Copy the generated site ID and paste the tag into your site's `<head>`:
 
 ```html
 <script
@@ -94,31 +84,25 @@ For the standard same-origin deployment, the tag looks like this:
 ></script>
 ```
 
-Replace both placeholders with your real analytics hostname and site ID. Install the tag in the pages you want measured, then open a tagged URL such as `https://www.example.com/?utm_source=setup-check&utm_medium=referral` in an ordinary browser. The tracker skips WebDriver browsers, so an automated browser session alone is not proof that collection is broken.
+If you used `--free`, add the `"Powered by Grosslytics"` link inside your tracked site's homepage footer (`rel="sponsored"` or `rel="nofollow"` are both accepted) and click **Verify** so the dashboard opens.
 
-Use the browser’s Network panel to check that `g.js` loads and that `/api/event` receives a successful response. If your site uses Content Security Policy, add the analytics origin to the relevant `script-src` and `connect-src` directives while preserving the rest of your policy. Follow the [tracker installation instructions](/docs/#install).
+Next, test your tracking pipeline in an ordinary browser window (avoid headless WebDriver sessions, which `g.js` filters out as bots) using a campaign parameter such as `https://www.example.com/?utm_source=setup-check&utm_medium=referral`. If your site enforces a Content Security Policy, allow `analytics.example.com` in both `script-src` and `connect-src` per the [tracker setup docs](/docs/#install).
 
-A `202 Accepted` means the collector responded. Some filtered events also get a `202`, and enqueueing runs asynchronously. Check the stored Sources report for `setup-check` before treating the visit as recorded.
-
-| What you see | What to check |
+| Symptom | Where to check |
 | --- | --- |
-| `g.js` fails to load or there is no `/api/event` request | Confirm the script URL, site ID and browser console errors, including CSP. |
-| `/api/event` returns `403` or `404` | Confirm the tracked origin and site ID, then verify that `/api/*` reaches the API Worker. |
-| `/api/event` returns `202`, but the tagged visit is missing | Check the API Worker’s logs for failed queue sends. If the message arrived, inspect the ingest queue’s backlog and retries, the dead-letter queue and D1 write errors. |
+| `g.js` fails to load or no `/api/event` call appears | Check script URL, `data-site-id`, and CSP console errors |
+| `/api/event` returns `403` or `404` | Verify tracked domain spelling and `/api/*` routing to the API Worker |
+| `/api/event` returns `202`, but visit is missing | Inspect API Worker logs, `grosslytics-ingest` queue depth, and dead-letter queue errors |
 
-In local repository tests on November 21, 2026, eligible visits reached the queue stub, and filtered bot requests returned `202` without queuing an event. A separate ingestion test replayed a 100-message batch without duplicating stored events and retried an injected write failure. These tests used local fixtures. Use the Cloudflare dashboard and your own tagged visit to verify your deployed pipeline.
+## Step 5: Connect payments and verify revenue attribution
 
-## Step 5: Connect a payment provider and verify the complete journey
-
-Self-hosted web analytics becomes revenue attribution only after a payment is connected to the visitor who generated it. In the dashboard’s Payments settings, configure the provider and its webhook signing secret. The endpoint follows this pattern:
+Configure your webhook destination and signing secret under **Payments** in your dashboard:
 
 ```text
 https://analytics.example.com/api/webhooks/PROVIDER?siteId=YOUR_SITE_ID
 ```
 
-Use your provider’s exact event names and metadata mapping. For Stripe Checkout and Payment Links, follow the [Stripe revenue attribution guide](/blog/stripe-revenue-attribution/); for another gateway, use the [Polar and Dodo setup](/blog/polar-dodo-payments-analytics/) or [Paddle transaction guide](/blog/paddle-revenue-attribution/). These explain identity propagation, renewal behavior and reporting limitations separately from hosting.
-
-Run a provider-supported test purchase using a browser visit with a known UTM. Verify the signed webhook response, the stored payment amount and currency, and the attributed source. Test renewal and refund behavior you depend on rather than assuming support from a dashboard label. Each site has one reporting currency; the current implementation rejects new payments in another currency instead of converting them.
+Follow the dedicated setup guide for your payment stack: [Stripe](/blog/stripe-revenue-attribution/), [Paddle Billing](/blog/paddle-revenue-attribution/), [Polar & Dodo Payments](/blog/polar-dodo-payments-analytics/), or [Razorpay](/blog/razorpay-revenue-attribution/). Always send one sandbox or test purchase from a tagged URL and verify the sale credits your UTM source in the expected currency.
 
 <figure>
   <a href="/images/comparisons/grosslytics-2026-11-08-4f4bddd90794.jpg" aria-label="Open full-size Grosslytics screenshot">
@@ -127,37 +111,20 @@ Run a provider-supported test purchase using a browser visit with a known UTM. V
   <figcaption>The Grosslytics public demo shows the dashboard with sample data. Captured 2026-11-08. <a href="https://grosslytics.com/app/demo">Source: Grosslytics</a>.</figcaption>
 </figure>
 
-Before using the numbers for decisions, check:
+## What should you monitor after launch?
 
-1. A real browser visit reaches the live panel and the stored reports.
-2. A signed test payment appears once and credits the expected source.
-3. Reloading a report does not produce an unexpected D1 scan spike.
-4. Queue processing succeeds and the dead-letter queue is monitored.
-5. The private dashboard requires authentication and retains its noindex protections.
-
-Use your own dashboard to confirm that the test payment arrived.
-
-## What should you monitor after installation?
-
-Monitor Worker requests and CPU, D1 reads/writes and storage, queue operations and failures, and Durable Object usage together. In Cloudflare’s D1 dashboard, inspect Metrics → Row Metrics; query metadata also exposes `rows_read` and `rows_written`.
-
-Grosslytics currently queries raw events for dashboard reports, so repeated long-range reports can become expensive as data grows. Measure a representative traffic day and the reporting queries you actually use before projecting capacity. Keep backup/export and restore procedures for the database, and plan retention before storage becomes a blocker.
-
-To update a source install, rerun the source setup from its existing checkout. For a packaged install, rerun `npx grosslytics@latest install` from the same working folder. Back up first and review release and migration changes. Self-hosting gives you control of the Cloudflare account and database, while Cloudflare remains the infrastructure provider; it is not a guarantee of exclusive physical storage, legal compliance or automatic recovery.
-
-If the workload outgrows free allowances, evaluate the current paid plan and usage rates rather than treating $0 as a permanent ceiling. The Workers Paid plan starts at $5/month before additional usage. Start with the real event and query metrics from your own installation, then decide whether to optimize, upgrade, or use a [managed analytics option](/#pricing).
-
+Watch **D1 → Metrics → Row Metrics** alongside Queues backlog and Worker CPU. Because Grosslytics queries event rows dynamically for custom ranges and filters, enable an appropriate **Keep visit data** retention window (90 days to 2 years) under Settings if you run high-traffic sites on Cloudflare's free tier. When traffic exceeds free limits, upgrading to Workers Paid ($5/month) or choosing [managed hosting or Lifetime](/#pricing) keeps ingestion uninterrupted. See also how Grosslytics compares with self-hosted Docker analytics in [PostHog vs Grosslytics](/compare/posthog-alternative/) and [Plausible vs Grosslytics](/compare/plausible-alternative/).
 
 ## Frequently asked questions
 
 ### Is Cloudflare D1 enough for self-hosted web analytics?
 
-D1 provides the database. Grosslytics also uses Worker APIs, Queues and a SQLite-backed Durable Object, plus a dashboard and tracker. Plan and monitor the complete stack.
+D1 handles relational storage for visits, sessions, and payments, while Workers serve ingest and dashboard APIs, Queues buffer write bursts, and a Durable Object drives live presence. All four components fit in one Cloudflare account.
 
 ### Can this run with no monthly server bill?
 
-It can have a $0 Cloudflare usage bill on the Free plan while every relevant allowance is respected. A domain and optional license are separate costs, and limits can stop operations. Your available capacity depends on how your site uses each service.
+Yes, for sites staying within Cloudflare's Free plan limits (around 1,000-1,500 pageviews/day given Queue operation counts). Above that volume, Cloudflare's $5/month Workers Paid plan covers substantially higher throughput.
 
-### Can I deploy by running only npx grosslytics@latest?
+### Can I upgrade from free self-hosting to Lifetime later?
 
-The current CLI requires the install subcommand. The packaged path also needs a valid license and an available release; source setup requires repository access and build tools.
+Yes. Self-hosting with `--free` and `--lifetime` run the exact same stack on your Cloudflare account. Applying a Lifetime license removes the footer attribution requirement and grants commercial usage rights without redeploying your database.

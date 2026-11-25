@@ -1,152 +1,134 @@
 # 5 Best DataBull Alternatives for Paddle & Net Revenue
 
-> Canonical URL: https://grosslytics.com/compare/databull-alternative/ | Updated: 2026-11-10
+> Canonical URL: https://grosslytics.com/compare/databull-alternative/ | Updated: 2026-11-24
 
-I would choose a DataBull alternative by starting with the payment flows you need to keep and the responsibility you're willing to take on. I'd shortlist DataFast for managed revenue attribution, Umami for open-source instrumentation, and Grosslytics for supported Paddle, Razorpay or Lemon Squeezy webhooks and revenue after estimated fees. DataBull already supports first-touch and last-touch attribution, so those features alone are not a reason to replace it.
+Choose [Grosslytics](/#pricing) as your DataBull alternative if you want open-source code (AGPL-3.0), native webhooks for Paddle, Razorpay, PayPal, Gumroad, and RevenueCat alongside Stripe, Polar, and Dodo, plus automatic gateway fee and ad-spend deductions for `$0` self-hosted (or `$29` Lifetime / `$5.99/mo` Cloud). If you prefer fully managed SaaS without managing Cloudflare, shortlist **DataFast**, **Seline**, **Umami Cloud**, or **PostHog**.
 
 ## Key takeaways
 
-- Choose by payment provider, hosting responsibility and revenue definition before comparing license prices.
-- Grosslytics lists free source self-hosting, a $29 Lifetime option and $5.99/month hosting for 100,000 events; self-hosted infrastructure is separate.
-- First-touch and last-touch are separate single-touch models; Grosslytics' linear mode splits credit 50/50 between those endpoints.
-- A lower software price is useful only if the replacement preserves the payment and refund flows you need.
+- DataBull covers Stripe, Polar, Dodo, and Creem with first-touch, last-touch, and last-non-direct attribution; replace it when you need extra gateways, open-source code, fee/ad-spend deductions, or managed hosting.
+- **Grosslytics** adds Paddle, Razorpay, Cashfree, Gumroad, PayPal, and RevenueCat, calculates net revenue after fees, and supports free source self-hosting or `$29` Lifetime.
+- **DataFast** and **Seline** remove Cloudflare maintenance completely in exchange for event-tiered monthly billing.
+- Compare both license costs and gateway fees using our [payment fee calculator](/tools/payment-fee-calculator/).
 
-## What should a DataBull alternative improve?
+## When should you switch from DataBull?
 
-A replacement should solve a concrete integration or operating-cost problem, rather than repeat features DataBull already provides.
+DataBull's `$49` self-hosted Cloudflare license is hard to beat when your stack runs strictly on Stripe, Polar, Dodo, or Creem and you do not need source code access. Consider an alternative when you hit one of four gaps:
 
-Grosslytics is our product. This comparison draws on vendor documentation checked on November 8, 2026, and the Grosslytics implementation; the recommendations reflect the use cases described below.
+1. **You bill with Paddle or Razorpay:** [DataBull's payment setup](https://databull.app/docs/revenue) does not list native Paddle Billing or Razorpay webhooks.
+2. **You need net profit, not just gross revenue:** DataBull reports revenue before processor fees and ad spend; Grosslytics subtracts gateway fees and imported ad spend automatically.
+3. **You want inspectable open-source code:** DataBull's self-hosted bundle is proprietary, whereas Grosslytics and Umami publish full source code.
+4. **You want zero Cloudflare operations:** Managed tools like DataFast, Seline, or Grosslytics Cloud eliminate Worker/D1 maintenance.
 
-DataBull's [attribution documentation](https://databull.app/docs/attribution) lists first touch, last touch and last non-direct, plus renewal attribution and lifetime value. It is inaccurate to describe the product as having only one attribution choice.
+Check [DataBull's attribution docs](https://databull.app/docs/attribution) if you only need first-touch, last-touch, or last-non-direct models, as DataBull already includes all three.
 
-Its [payment setup](https://databull.app/docs/revenue) documents Stripe, Polar, Dodo and Creem. If you use Paddle or Razorpay, ask whether a documented integration covers the exact checkout and subscription flow you operate.
+## Five DataBull alternatives compared
 
-## Which five alternatives should you shortlist?
-
-These five cover managed attribution, open-source instrumentation and reporting after fees; the list groups use cases rather than declaring an overall winner.
-
-| Alternative | Why consider it | Published price | Payment approach | Main tradeoff |
+| Alternative | Best fit | Published pricing | Payment integrations | Main tradeoff |
 | --- | --- | --- | --- | --- |
-| 1. DataFast | Managed revenue attribution | Starter from $9/month, Growth from $19 at entry volume; verify billing selection | Stripe, Lemon Squeezy, Polar, Shopify and Payment API | Larger event volumes require a larger plan |
-| 2. Seline | Managed journeys and revenue | $9/month at 10k events; $24 at 100k | Stripe, Polar or custom revenue events | Recurring volume-based bill |
-| 3. Grosslytics | Paddle, Razorpay and fee reporting | Source self-host free; $29 Lifetime; cloud $5.99/month at 100k events | Provider-specific webhooks | Estimated fees; gateway-specific refund limits |
-| 4. Umami | Open-source control | Source self-host free; cloud Hobby $0 at 100k events, one site | Revenue events; Cloud payment integrations also advertised | Check Cloud plan eligibility versus self-hosted features |
-| 5. PostHog | Product analysis with revenue | 1M analytics events/month free; other products metered separately | Stripe source or revenue events | More reporting configuration |
+| 1. Grosslytics | Paddle, Razorpay & net revenue | `$0` self-host (footer link); `$29` Lifetime; `$5.99/mo` Cloud (100k) | Stripe, Paddle, Razorpay, Polar, Dodo, PayPal, Gumroad, Cashfree, RevenueCat, Lemon Squeezy | No native Creem webhook yet; full refunds on Stripe, Paddle, Dodo, Gumroad |
+| 2. DataFast | Managed revenue attribution | From `$9/mo` Starter / `$19/mo` Growth | Stripe, Lemon Squeezy, Polar, Shopify, Payment API | Event-volume subscription; locks dashboard over limit |
+| 3. Seline | Managed journeys & funnels | `$9/mo` (10k events); `$24/mo` (100k) | Stripe, Polar, custom revenue events | Recurring event-based pricing |
+| 4. Umami | Open-source Postgres or Cloud | `$0` self-host; Cloud Hobby `$0` (100k); Pro `$20/mo` | Custom revenue events; Cloud payment sync (Pro+) | Self-hosting requires Node + Postgres |
+| 5. PostHog | Product analytics + revenue | 1M free analytics events/mo | Stripe data source + custom events | Heavier SDK and SQL/Insights configuration |
 
-Sources: [DataFast](https://datafa.st/), [Seline pricing](https://seline.com/pricing), [Grosslytics pricing](/#pricing), [Umami pricing](https://umami.is/pricing) and [PostHog pricing](https://posthog.com/pricing). Starting prices are not quotes for identical workloads.
+Sources: [Grosslytics pricing](/#pricing), [DataFast](https://datafa.st/), [Seline pricing](https://seline.com/pricing), [Umami pricing](https://umami.is/pricing), and [PostHog pricing](https://posthog.com/pricing).
 
-### 1. DataFast: when you want managed attribution
+### 1. Grosslytics: best for Paddle, Razorpay, and net profit tracking
 
-DataFast fits a founder who prefers a managed service and whose gateway matches its native connections or Payment API. Its Growth plan documents social mentions and link attribution.
-
-<figure>
-  <a href="/images/comparisons/datafast-public-demo-2026-11-08.jpg" aria-label="Open full-size DataFast screenshot">
-    <img src="/images/comparisons/datafast-public-demo-2026-11-08.jpg" alt="DataFast public demo showing visitors, attributed revenue and a daily traffic chart." width="1265" height="712" loading="lazy" decoding="async" />
-  </a>
-  <figcaption>DataFast — public demo. Captured November 8, 2026. <a href="https://datafa.st/demo">View source page</a>.</figcaption>
-</figure>
-
-Choose it if operating your own deployment is the problem you want to remove. The event-based subscription still needs pricing at your expected usage.
-
-### 2. Seline: when visitor journeys matter
-
-Seline connects Stripe or Polar, or accepts custom revenue events, alongside visitor journeys. That makes it a candidate when you want to inspect the path from acquisition to payment in a managed product.
-
-<figure>
-  <a href="/images/comparisons/seline-public-demo-2026-11-08.jpg" aria-label="Open full-size Seline screenshot">
-    <img src="/images/comparisons/seline-public-demo-2026-11-08.jpg" alt="Seline public demo for edain.io showing visits, unique visitors and pageview charts." width="1265" height="712" loading="lazy" decoding="async" />
-  </a>
-  <figcaption>Seline — public shared demo. Captured November 8, 2026. <a href="https://app.seline.com/share/edain.io">View source page</a>.</figcaption>
-</figure>
-
-A custom event route is not the same as a native Paddle webhook connector. Validate the engineering work before choosing it for an unsupported provider. [Source: Seline revenue tracking](https://seline.com/revenue-analytics).
-
-### 3. Grosslytics: when Paddle or Razorpay is the blocker
-
-Grosslytics has dedicated webhook handlers for Paddle, Razorpay and Lemon Squeezy as well as Stripe and other providers. Checkout integration still matters: Paddle needs visitor metadata in custom data, and Razorpay needs it in order or payment notes.
+Grosslytics runs on the same Cloudflare Workers + D1 architecture as DataBull while expanding payment support to 10 gateways and reporting gross revenue, net revenue (after gateway fees), and profit (after ad spend) side by side. It also reads existing `databull_visitor_id` Stripe metadata and `window.databull()` goal calls for simpler migrations.
 
 <figure>
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
+  <figcaption>Grosslytics public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
-Grosslytics estimates Stripe fees using a configured schedule and subtracts ad spend you enter or import. Its profit view excludes payroll, hosting and other operating costs; full Stripe refunds are handled, but partial Stripe refunds are not automatically deducted.
+**Trade-offs:** Free self-hosting requires a `"Powered by Grosslytics"` link in your footer unless you buy the `$29` Lifetime license (`$20` less than DataBull's `$49` license). Creem is not currently supported, and partial refunds require manual reconciliation. See the [Paddle setup guide](/blog/paddle-revenue-attribution/) and [Razorpay setup guide](/blog/razorpay-revenue-attribution/).
 
-Use the [payment setup guide](/docs#payments) to test the integration, rather than assuming every provider has identical renewal and refund behavior.
+### 2. DataFast: best for hands-off managed attribution
 
-### 4. Umami: when you want to own the instrumentation
+DataFast handles hosting, Shopify and WooCommerce store orders, and growth features like social mention tracking without touching Cloudflare Workers or D1.
 
-Umami records revenue through event properties, which lets you connect a payment pipeline you control. Its documented revenue event includes an amount and currency.
+<figure>
+  <a href="/images/comparisons/datafast-public-demo-2026-11-08.jpg" aria-label="Open full-size DataFast screenshot">
+    <img src="/images/comparisons/datafast-public-demo-2026-11-08.jpg" alt="DataFast public demo showing visitors, attributed revenue and a daily traffic chart." width="1265" height="712" loading="lazy" decoding="async" />
+  </a>
+  <figcaption>DataFast public demo. Captured November 8, 2026. <a href="https://datafa.st/demo">View source page</a>.</figcaption>
+</figure>
+
+**Trade-offs:** Monthly pricing scales with event tiers. Read our full comparison in [7 DataFast Alternatives](/compare/datafast-alternative/) and [DataFast vs DataBull vs Grosslytics](/compare/datafast-vs-databull/).
+
+### 3. Seline: best for managed visitor journeys
+
+Seline connects Stripe and Polar alongside individual visitor profiles, funnels, and session histories in a clean hosted dashboard.
+
+<figure>
+  <a href="/images/comparisons/seline-public-demo-2026-11-08.jpg" aria-label="Open full-size Seline screenshot">
+    <img src="/images/comparisons/seline-public-demo-2026-11-08.jpg" alt="Seline public demo for edain.io showing visits, unique visitors and pageview charts." width="1265" height="712" loading="lazy" decoding="async" />
+  </a>
+  <figcaption>Seline public shared demo. Captured November 8, 2026. <a href="https://app.seline.com/share/edain.io">View source page</a>.</figcaption>
+</figure>
+
+**Trade-offs:** Native billing integrations cover Stripe and Polar; other gateways require custom event instrumentation, and pricing scales with events (`$24/mo` at 100k). [Source: Seline revenue tracking](https://seline.com/revenue-analytics).
+
+### 4. Umami: best for open-source Postgres teams
+
+Umami lets you self-host on PostgreSQL with full custom revenue events or use Umami Cloud Pro (`$20/mo`) for managed Stripe, Paddle, Polar, Dodo, and WooCommerce payment sync.
 
 <figure>
   <a href="/images/comparisons/umami-homepage-preview-2026-11-08.jpg" aria-label="Open full-size Umami screenshot">
     <img src="/images/comparisons/umami-homepage-preview-2026-11-08.jpg" alt="Umami homepage dashboard preview showing traffic metrics, pageviews and referrers." width="620" height="526" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Umami — homepage product preview. Captured November 8, 2026. <a href="https://umami.is/">View source page</a>.</figcaption>
+  <figcaption>Umami homepage product preview. Captured November 8, 2026. <a href="https://umami.is/">View source page</a>.</figcaption>
 </figure>
 
-Umami Cloud also advertises hourly payment and refund sync for Stripe, Paddle, Polar, Dodo Payments, WooCommerce and Lemon Squeezy. Check plan eligibility and which features apply to self-hosting before treating it as a DIY-only option. Sources: [Cloud payment integrations](https://umami.is/) and [revenue events](https://docs.umami.is/docs/revenue).
+**Trade-offs:** Self-hosting relies on Docker/Node + PostgreSQL rather than serverless Cloudflare Workers, and managed payment sync sits behind Cloud Pro. Sources: [Umami Cloud](https://umami.is/) and [revenue events](https://docs.umami.is/docs/revenue).
 
-### 5. PostHog: when revenue is one part of product analysis
+### 5. PostHog: best when revenue sits beside product telemetry
 
-PostHog is worth considering when acquisition questions sit alongside activation, retention and product behavior. Its payment-platform documentation currently identifies Stripe as the supported revenue source.
+PostHog connects Stripe data directly to product funnels, session replays, and SQL insights inside one platform with 1M free monthly analytics events.
 
 <figure>
   <a href="/images/comparisons/posthog-homepage-2026-11-08.jpg" aria-label="Open full-size PostHog screenshot">
     <img src="/images/comparisons/posthog-homepage-2026-11-08.jpg" alt="PostHog homepage showing its platform overview and illustrative AI analysis with sample data." width="1025" height="1226" loading="lazy" decoding="async" />
   </a>
-  <figcaption>PostHog — homepage with illustrative sample data. Captured November 8, 2026. <a href="https://posthog.com/">View source page</a>.</figcaption>
+  <figcaption>PostHog homepage with illustrative sample data. Captured November 8, 2026. <a href="https://posthog.com/">View source page</a>.</figcaption>
 </figure>
 
-It can be more work than a small attribution dashboard, but replacing an existing PostHog setup may create duplicate instrumentation. [Source: payment platform support](https://posthog.com/docs/revenue-analytics/payment-platforms).
+**Trade-offs:** Currently focuses on Stripe for native billing sync and carries more setup overhead if you only want acquisition-to-revenue reporting. Compare them in [PostHog vs Grosslytics](/compare/posthog-alternative/). [Source: PostHog payment platforms](https://posthog.com/docs/revenue-analytics/payment-platforms).
 
-## How do attribution models change a channel's revenue?
+## How do attribution models change channel credit?
 
-A model changes which source receives credit for a payment, without changing the amount paid.
-
-Suppose someone first arrives from a newsletter, later visits through an ad and then buys for $100. First touch credits the newsletter; last touch credits the ad; Grosslytics' endpoint split assigns $50 to each.
+Attribution models determine which channel receives revenue credit without changing the payment total. If a buyer discovers you via a newsletter and returns a week later through a paid ad to purchase a `$100` plan:
 
 ```text
 payment = 100
 first_touch = newsletter: 100
 last_touch = ad: 100
-endpoint_split = newsletter: 50, ad: 50
+linear (50/50 split) = newsletter: 50, ad: 50
 ```
 
-That split does not distribute credit across every intermediate visit. See the [dashboard definitions](/docs#dashboard) before treating it as a full-journey multi-touch model.
+See the [dashboard definitions](/docs/#dashboard) for how Grosslytics calculates all three models across sources and entry pages.
 
-## What does the lower license price actually save?
+## Checklist before leaving DataBull
 
-The listed Grosslytics Lifetime price is $20 below DataBull's $49 self-hosted license, before infrastructure and operating work.
-
-The arithmetic is $49 − $29 = $20; free source self-hosting removes the Grosslytics software-license charge altogether. Compare deployment effort, update handling and support as well as price. [Source: DataBull license pricing](https://databull.app/).
-
-Hosting cost and query latency depend on traffic, query shape and database usage; neither follows directly from the license price.
-
-## What should you test before leaving DataBull?
-
-Test the candidate against your real checkout and the lifecycle events that affect your decisions.
-
-1. Send a tagged visitor through your actual payment provider.
-2. Confirm the correct source, amount and currency.
-3. Trigger a renewal and inspect how it is credited.
-4. Check full and partial refunds separately.
-5. Compare the normal month, a traffic spike and your maintenance cost.
-
-Keep the tool that answers the required revenue question with acceptable upkeep. Next, run that checklist against one candidate before changing your production tracker.
+1. Run a tagged test visitor through your primary gateway (Stripe, Paddle, Polar, Dodo, or Razorpay).
+2. Confirm currency, tax deduction, and fee schedule accuracy in the [payment setup guide](/docs/#payments).
+3. Test a subscription renewal and full refund in sandbox.
+4. Check Cloudflare D1 and Queue allowances in our [Cloudflare D1 self-hosting guide](/blog/cloudflare-d1-web-analytics/).
 
 ## Frequently asked questions
 
 ### Does DataBull support first-touch attribution?
 
-Yes. Its documentation lists first touch, last touch and last non-direct. Evaluate a replacement on the model or integration you actually lack.
+Yes. DataBull supports first-touch, last-touch, and last-non-direct attribution. Switch only if you need open-source code, Paddle/Razorpay support, gateway fee deductions, or managed hosting.
 
-### Which alternative supports Paddle and Razorpay webhooks?
+### Which DataBull alternative supports Paddle and Razorpay webhooks?
 
-Grosslytics has provider-specific webhook handlers for both. Configure visitor metadata and test the complete payment lifecycle; refund support differs by gateway.
+Grosslytics provides signed webhook handlers for both Paddle Billing (including full refunds and renewals) and Razorpay Standard Checkout, plus Stripe, Polar, Dodo Payments, PayPal, Cashfree, Gumroad, and RevenueCat.
 
 ### Is $29 the only way to self-host Grosslytics?
 
-No. Self-hosting from source is free; the listed $29 Lifetime option adds installation convenience, support and a commercial license. Cloudflare usage remains separate.
+No. Self-hosting from source or via `npx grosslytics@latest install --free` is `$0` forever with a `"Powered by Grosslytics"` footer link; the `$29` Lifetime license removes the footer link requirement and adds priority email support and a commercial license.

@@ -122,12 +122,13 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 
 				<h3 class={h3}>Currencies, tax and refunds</h3>
 				<p>Each site reports in one currency: USD, EUR, GBP or INR, chosen when you add the site. A payment in another currency is refused (HTTP 422), never converted or mixed in. Full Stripe and Dodo refunds, approved full Paddle refunds, and Gumroad refunds remove the sale from revenue. Partial refunds and other providers’ refunds need separate reconciliation.</p>
-				<p>Sales tax or VAT that the provider reports (Stripe, Paddle, Polar, Lemon Squeezy, Dodo Payments, RevenueCat) is taken out of revenue, because it is not yours to keep. Net revenue then subtracts the payment fee: PayPal’s and RevenueCat’s real fee from the event, and each other provider’s standard published fee, which is an estimate.</p>
+				<p>Sales tax or VAT that the provider reports (Stripe, Paddle, Polar, Lemon Squeezy, Dodo Payments, RevenueCat) is taken out of revenue, because it is not yours to keep. Net revenue then subtracts the payment fee: PayPal’s and RevenueCat’s real fee from the event, and each other provider’s standard published fee, which you can preview in the <a class="text-accent hover:underline" href="/tools/payment-fee-calculator/">payment fee calculator</a>.</p>
+				<p>Provider walkthroughs: <a class="text-accent hover:underline" href="/blog/stripe-revenue-attribution/">Stripe</a>, <a class="text-accent hover:underline" href="/blog/paddle-revenue-attribution/">Paddle Billing</a>, <a class="text-accent hover:underline" href="/blog/polar-dodo-payments-analytics/">Polar and Dodo Payments</a>, and <a class="text-accent hover:underline" href="/blog/razorpay-revenue-attribution/">Razorpay</a>.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
 				<h2 id="switch" class={h2}>Switch from DataFast, DataBull, Plausible or Umami</h2>
-				<p>Replace the old script tag with the Grosslytics one. Your existing goal attributes and JavaScript calls keep working (see <a class="text-accent hover:underline" href="#goals">Track goals</a>), and Stripe metadata named <code class={code}>datafast_visitor_id</code> or <code class={code}>databull_visitor_id</code> is read like <code class={code}>visitor_id</code>.</p>
+				<p>Replace the old script tag with the Grosslytics one. Your existing goal attributes and JavaScript calls keep working (see <a class="text-accent hover:underline" href="#goals">Track goals</a>), and Stripe metadata named <code class={code}>datafast_visitor_id</code> or <code class={code}>databull_visitor_id</code> is read like <code class={code}>visitor_id</code>. See how Grosslytics compares with <a class="text-accent hover:underline" href="/compare/datafast-alternative/">DataFast</a>, <a class="text-accent hover:underline" href="/compare/databull-alternative/">DataBull</a>, <a class="text-accent hover:underline" href="/compare/plausible-alternative/">Plausible</a>, <a class="text-accent hover:underline" href="/compare/posthog-alternative/">PostHog</a>, and <a class="text-accent hover:underline" href="/compare/ga4-alternative/">Google Analytics 4</a>.</p>
 				<p>One change: those tools keep the visitor ID in a cookie, and Grosslytics sets no cookies. If your server reads the <code class={code}>datafast_visitor_id</code> cookie to fill Stripe metadata, send <code class={code}>localStorage.getItem('gl_vid')</code> from the browser instead.</p>
 				<p><strong>Bring your history:</strong> in <a class="text-accent hover:underline" href="/app">/app</a> → <strong>Import past Stripe payments</strong>, paste a restricted key with read access to Checkout Sessions and Invoices. Past sales arrive with their real dates. They show as Unattributed, because no visits were recorded for them.</p>
 			</section>
@@ -148,7 +149,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 				<p><strong>Next.js</strong> (<code class={code}>middleware.ts</code>):</p>
 				<pre class={pre}><code>{`import { NextResponse, type NextRequest } from 'next/server';
 
-const AI = /GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|PerplexityBot|anthropic-ai|Google-Extended|Bytespider|Applebot-Extended|meta-externalagent|CCBot/;
+const AI = /GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-SearchBot|Claude-User|PerplexityBot|Perplexity-User|anthropic-ai|Google-Extended|Bytespider|Applebot-Extended|meta-externalagent|CCBot/;
 
 export function middleware(req: NextRequest) {
   const ua = req.headers.get('user-agent') || '';
@@ -165,7 +166,7 @@ export function middleware(req: NextRequest) {
 				<pre class={pre}><code>{`export default {
   async fetch(req, env, ctx) {
     const ua = req.headers.get('user-agent') || '';
-    if (/GPTBot|ClaudeBot|PerplexityBot|OAI-SearchBot|ChatGPT-User|Google-Extended/.test(ua)) {
+    if (/GPTBot|ClaudeBot|Claude-SearchBot|Claude-User|PerplexityBot|Perplexity-User|OAI-SearchBot|ChatGPT-User|Google-Extended/.test(ua)) {
       ctx.waitUntil(fetch('${ORIGIN}/api/crawl', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.GROSSLYTICS_CRAWL_KEY },

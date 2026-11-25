@@ -1,13 +1,19 @@
 ---
 import type { MarkdownInstance } from 'astro';
 import Page from '../../layouts/Page.astro';
+import SchemaJsonLd from '../../components/seo/SchemaJsonLd.astro';
 const articles = Object.values(import.meta.glob<MarkdownInstance<{title: string; description: string}>>('./*.md', { eager: true }))
     .sort((a, b) => a.frontmatter.title.localeCompare(b.frontmatter.title));
+const breadcrumbs = [
+    { name: 'Home', item: 'https://grosslytics.com/' },
+    { name: 'Blog', item: 'https://grosslytics.com/blog/' },
+];
 ---
 <Page title="Revenue attribution guides | Grosslytics" description="Implementation guides for connecting payment events to acquisition channels, with code examples and current limitations.">
+    <SchemaJsonLd slot="head" type="breadcrumb" breadcrumbs={breadcrumbs} />
     <main class="mx-auto max-w-3xl px-5 py-16">
         <h1 class="text-4xl font-semibold tracking-tight">Revenue attribution guides</h1>
-        <p class="mt-4 text-ink-2">Implementation guides for connecting payment events to acquisition channels, with code examples and current limitations.</p>
+        <p class="mt-4 text-ink-2">Implementation guides for connecting Stripe, Paddle, Polar, Dodo Payments, Razorpay, and AI search traffic to acquisition channels. Written by <a class="underline" href="/authors/david-mill/">David Mill</a>. Also see <a class="underline" href="/compare/">tool comparisons</a> and the <a class="underline" href="/tools/payment-fee-calculator/">payment fee calculator</a>.</p>
         <ul class="mt-8">
             {articles.map(article => <li class="border-b border-line py-6">
                 <h2 class="text-xl font-semibold"><a class="underline" href={`${article.url}/`}>{article.frontmatter.title}</a></h2>

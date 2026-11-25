@@ -9,6 +9,11 @@ Allow: /
 Disallow: /app/
 Disallow: /api/
 
+User-agent: GPTBot
+Allow: /
+Disallow: /app/
+Disallow: /api/
+
 User-agent: OAI-SearchBot
 Allow: /
 Disallow: /app/
@@ -24,7 +29,22 @@ Allow: /
 Disallow: /app/
 Disallow: /api/
 
+User-agent: Claude-SearchBot
+Allow: /
+Disallow: /app/
+Disallow: /api/
+
+User-agent: Claude-User
+Allow: /
+Disallow: /app/
+Disallow: /api/
+
 User-agent: PerplexityBot
+Allow: /
+Disallow: /app/
+Disallow: /api/
+
+User-agent: Perplexity-User
 Allow: /
 Disallow: /app/
 Disallow: /api/

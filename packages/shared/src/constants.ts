@@ -4,7 +4,10 @@ export const AI_CRAWLER_AGENTS = [
 	'OAI-SearchBot',
 	'ChatGPT-User',
 	'ClaudeBot',
+	'Claude-SearchBot',
+	'Claude-User',
 	'PerplexityBot',
+	'Perplexity-User',
 	'anthropic-ai',
 	'Google-Extended',
 	'Bytespider',
@@ -28,10 +31,22 @@ export const SOURCE_CATEGORIES = {
 } as const;
 
 /** Payment gateway identifiers */
-export const PAYMENT_GATEWAYS = ['stripe', 'razorpay', 'polar', 'paddle', 'lemonsqueezy', 'gumroad', 'paypal', 'cashfree', 'revenuecat', 'dodo'] as const;
+export const PAYMENT_GATEWAYS = [
+	'stripe',
+	'razorpay',
+	'polar',
+	'paddle',
+	'lemonsqueezy',
+	'gumroad',
+	'paypal',
+	'cashfree',
+	'revenuecat',
+	'dodo',
+] as const;
 
 /** Visitor presence TTL (milliseconds) */
 export const PRESENCE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /** Attribution link shown during free self-hosted setup. */
-export const FOOTER_SNIPPET = '<a href="https://grosslytics.com" rel="sponsored">Powered by Grosslytics</a>';
+export const FOOTER_SNIPPET =
+	'<a href="https://grosslytics.com" rel="sponsored">Powered by Grosslytics</a>';

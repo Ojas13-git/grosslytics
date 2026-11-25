@@ -1,6 +1,26 @@
 # Handoff
 
-The current state of Grosslytics, kept up to date at the end of each work session. Read this first instead of replaying old conversations. Last updated: 2026-11-11.
+The current state of Grosslytics, kept up to date at the end of each work session. Read this first instead of replaying old conversations. Last updated: 2026-11-25.
+
+## Footer verification hotfix (2026-11-25, v0.2.3)
+
+- Cloudflare Workers reject `redirect: 'error'` before sending the DNS lookup, so the free footer verifier reported “Could not load” even with a valid credit. The shared DNS helper now uses `redirect: 'manual'` and rejects non-success responses, including redirects.
+- Reproduced the failure in workerd. All 70 tests and the API typecheck passed. GitHub published v0.2.3 from `e339129`, and the public installer archive matches its manifest checksum. The packaged Worker's authenticated verification route followed the `spacewisemac.in` → `www.spacewisemac.in` redirect, found the live credit, and saved verification in local D1.
+- Rolled out `2026-11-25-e339129` to the `grosslytics.com` API and dashboard from a clean tag checkout. Verified both live versions, sign-in, protected stats, and the tracker scripts. Promoted the exact tagged v0.2.3 archive to `grosslytics-releases/latest.tgz` and verified its checksum through the authenticated Lifetime download endpoint.
+- `analytics.spacewisemac.in` reports v0.2.3 is available. Its owner needs to run `npx grosslytics@latest update` in the original install folder, then click **I added it, verify**. The customer controls that Cloudflare deployment.
+
+## SEO audit, article cleanup, and internal linking fixes (2026-11-24, not committed, not deployed)
+
+- **Conversion & spec consistency:** Moved `featured: true` on `/` pricing from the waitlisted Indie Cloud card to Lifetime (`$29`) and labeled Indie Cloud `"Join Cloud waitlist"` (since `CLOUD` is off on live `/api/auth/status`). Standardized tracker size claims across `/`, `README.md`, `llms.txt`, `datafast-vs-databull.md`, and `posthog-alternative.md` to `1.8 KB` Brotli (`1,858` bytes compressed, `3,782` bytes raw, matching `packages/tracker/build.ts`). Updated `/` FAQ refund coverage to include Paddle alongside Stripe, Dodo, and Gumroad.
+- **Technical SEO, schemas & sync:** Added `Claude-SearchBot`, `Claude-User`, and `Perplexity-User` to `AI_CRAWLER_AGENTS` (`packages/shared/src/constants.ts`), `robots.txt`, and `/docs/` crawler snippets. Updated `SchemaJsonLd.astro`, `Article.astro`, and `compare/[slug].astro` to emit `BreadcrumbList` JSON-LD and `image`/`publisher`/`mainEntityOfPage` on `TechArticle`, plus `sameAs` (`github.com/vidneat/grosslytics`) on `Organization`. Fixed `llms.txt` demo path (`/app/` -> `/app/demo`), added all 6 comparisons and `/tools/payment-fee-calculator/`, resynced all 11 `public/{blog,compare}/*.md` twins from `src/pages/` (fixing stale `public/blog/cloudflare-d1-web-analytics.md`), and removed the unreferenced `cursorful-2026-11-11-df298c52bfaf.jpg` + `.json`.
+- **Internal linking, intent & free tool route:** Added `/tools/payment-fee-calculator/` (using `RoiCalculator.tsx` and gateway fee tables from `packages/shared/src/fees.ts`). Added `/compare/datafast-vs-databull/`, `/compare/posthog-alternative/`, `/tools/payment-fee-calculator/`, and `/authors/david-mill/` to `Page.astro` footer; expanded `/` Compare grid to all 6 comparisons; added a Revenue attribution guides section and card links from `/` and `/docs/`. Contextual inbound links across all money pages now satisfy `>= 3` (`0` orphan money pages). Aligned comparison titles/H1s (`Plausible Alternative`, `PostHog Alternative`, `Google Analytics 4 Alternative`) with slug intent, trimmed `paddle` and `razorpay` meta descriptions to <= 155 chars, and repositioned `datafast-alternative.md` and `databull-alternative.md` around Grosslytics' strengths alongside honest competitor trade-offs.
+- **Article prose cleanup (`unslop-seo`):** Removed out-of-context AI-audit leakage (`"no 90-second setup guarantee is made"`, `"no two-minute migration time is promised"`, `"Can I promise setup in three minutes?"`, `"rather than the proposed 1.14 KB claim"`, local queue-stub unit test logs, duplicated payroll/MRR boilerplate, and out-of-context auth/security caveats) across all 11 `.md` posts, fixed all 21 slashless `/docs#...` links (`307` redirects), resolved `update` vs `install` contradictions in `cloudflare-d1-web-analytics.md`, upgraded short image `alt` texts (`dodo`, `lemon-squeezy`, `plausible`) to 80+ chars, and normalized curly quotes/dashes (`0 hits` on the `unslop-seo` check script).
+- **Verified locally (after final edit):** `unslop-seo` check script (`0 hits` across all 22 source and public `.md` files), `seo-mcp` `auditSeoContent` & `auditVisuals` (`0` errors across all 11 articles), internal link graph (`0` orphan money pages, `0` `/docs#` links), `bun run --cwd apps/web build` (22 OG PNGs, 21 sitemap URLs, `0` heading skips, `0` alt-length warnings, valid JSON-LD), `bun test packages apps` (70 pass, 0 fail), `bun run --cwd packages/seo-mcp test` (2 pass, 0 fail), and `tsc --noEmit` on `apps/web`, `apps/edge-api`, and `packages/shared`. `bunx biome check --write packages/shared/src/constants.ts` passed (repo-wide `bun run lint` still reports pre-existing formatting/lint issues in untouched files).
+- **Not done / owner action required (cannot be changed in code):**
+  - Deploy the updated build (`PUBLIC_OWN_SITE_ID=gl_ee5c6c8cdca1 CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup`) so fixes go live on `grosslytics.com`.
+  - Off-page authority & distribution (`0` GitHub stars, `0` indexed directory/Reddit/HN mentions): submit to AlternativeTo, SaaSHub, OpenAlternative, Awesome Tools, G2, and MCP directories; engage authentically on HN/Reddit; pitch listicles.
+  - Verify Google Search Console & Bing Webmaster Tools and submit `https://grosslytics.com/sitemap-index.xml`.
+  - Confirm `linkedin.com/in/david-mill/` and `x.com/handancorp` in `Article.astro` / `/authors/david-mill/` are canonical founder profiles, and decide whether to enable `CLOUD=1` for Indie Cloud signups.
 
 ## Affiliate foundations: Paddle refunds (2026-11-11, deployed)
 
@@ -29,7 +49,7 @@ Three connections, each pointing at the owner's own API (a Cloudflare Worker):
   - `/share/<domain>`: public revenue page.
   - `/compare/<slug>`: comparison pages.
   - `/badge`, `/og`: badge and social-card images.
-- `packages/tracker`: source for `g.js`. Run `bun run build` in that folder, then copy `dist/g.js` to `apps/web/public/g.js`. The build fails above 1,587 bytes Brotli (the most that rounds to the site's "1.5 KB"); it is currently 1,560. The same build makes the opt-in click script `dist/c.js`; copy both to `apps/web/public/`. It has tests in `src/g.test.ts`, which run the built file, so build before testing.
+- `packages/tracker`: source for `g.js`. Run `bun run build` in that folder, then copy `dist/g.js` to `apps/web/public/g.js`. The build fails above 1,894 bytes Brotli (`1.8 KB`); it is currently `1,858` bytes Brotli (`3,782` bytes raw). The same build makes the opt-in click script `dist/c.js` (`800` bytes Brotli); copy both to `apps/web/public/`. It has tests in `src/g.test.ts`, which run the built file, so build before testing.
 - `packages/db-d1`: `queryDashboard` (one batched set of SQL queries) and migrations 001–013.
 - `packages/shared`: types and the dashboard contract (`dashboard.ts`).
 - `scripts/db.ts`: local migrate and seed; also migrates the remote database.
@@ -143,7 +163,7 @@ An audit of the 20 live sitemap pages found six faults. Five are fixed in code; 
   - Own tracking: `Page.astro` adds `g.js` to non-dashboard pages when built with `PUBLIC_OWN_SITE_ID`. Releases for buyers strip `PUBLIC_*`, so they never get it.
   - To go live: add grosslytics.com as a site on `/app`, then deploy with `PUBLIC_OWN_SITE_ID=<its gl_ id> CLOUDFLARE_ACCOUNT_ID=f6883459148b86e04de194a74b9ad66d bun run setup`. Every later deploy needs the variable too, or the tag disappears.
   - Verified: 54 tests, web and db-d1 typecheck, builds with and without the variable (20 of 20 static pages vs 0). In a local browser, `/blog/?utm_source=chatgpt.com` got a 202 from `/api/event` and the event was stored as AI Search; `/app/demo` has no tag. The test visit was deleted. Not checked on the live site.
-- Found, not fixed: `AI_CRAWLER_AGENTS` lacks `Claude-SearchBot`, `Claude-User`, `Perplexity-User`. `llms.txt` lists the demo as `/app/`.
+- Fixed in 2026-11-24 SEO pass: `AI_CRAWLER_AGENTS` now includes `Claude-SearchBot`, `Claude-User`, `Perplexity-User`, and `llms.txt` lists the demo as `/app/demo`.
 - For the user: connect Search Console and Bing Webmaster, decide on turning `CLOUD` on, and confirm the David Mill LinkedIn and X links in the author schema are genuine.
 
 ## SEO MCP on VidNeatWeb (2026-11-08, on `main`, pushed)

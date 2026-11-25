@@ -1,15 +1,18 @@
 ---
 interface Props {
-	type: 'software' | 'article' | 'faq';
+	type: 'software' | 'article' | 'faq' | 'breadcrumb';
 	title?: string;
 	description?: string;
+	url?: string;
+	image?: string;
 	datePublished?: string;
 	dateModified?: string;
 	author?: Record<string, unknown>;
 	faqs?: Array<{ question: string; answer: string }>;
+	breadcrumbs?: Array<{ name: string; item: string }>;
 }
 
-const { type, title, description, datePublished, dateModified, author, faqs = [] } = Astro.props;
+const { type, title, description, url, image, datePublished, dateModified, author, faqs = [], breadcrumbs = [] } = Astro.props;
 
 let schemaObj: Record<string, unknown> = {};
 
@@ -20,6 +23,7 @@ if (type === 'software') {
 			{
 				'@type': 'SoftwareApplication',
 				name: 'Grosslytics',
+				url: 'https://grosslytics.com/',
 				applicationCategory: 'BusinessApplication',
 				operatingSystem: 'Cloudflare Workers, Web',
 				offers: {
@@ -29,18 +33,19 @@ if (type === 'software') {
 					highPrice: '29',
 					offerCount: '3',
 				},
-				description: 'Revenue analytics that credits each payment to the channel that brought the buyer, after payment fees and ad spend.',
+				description: 'Open-source revenue analytics that credits each payment to the channel that brought the buyer, after payment fees and ad spend.',
 			},
 			{
 				'@type': 'Organization',
 				name: 'Grosslytics',
-				url: 'https://grosslytics.com',
+				url: 'https://grosslytics.com/',
 				logo: 'https://grosslytics.com/logo.png',
+				sameAs: ['https://github.com/vidneat/grosslytics'],
 			},
 			{
 				'@type': 'WebSite',
 				name: 'Grosslytics',
-				url: 'https://grosslytics.com',
+				url: 'https://grosslytics.com/',
 			},
 		],
 	};
@@ -50,10 +55,18 @@ if (type === 'software') {
 		'@type': 'TechArticle',
 		headline: title,
 		description: description,
+		...(url ? { mainEntityOfPage: { '@type': 'WebPage', '@id': url } } : {}),
+		...(image ? { image: [image] } : {}),
+		publisher: {
+			'@type': 'Organization',
+			name: 'Grosslytics',
+			url: 'https://grosslytics.com/',
+			logo: { '@type': 'ImageObject', url: 'https://grosslytics.com/logo.png' },
+		},
 		author: author || {
 			'@type': 'Organization',
 			name: 'Grosslytics',
-			url: 'https://grosslytics.com',
+			url: 'https://grosslytics.com/',
 		},
 		...(datePublished ? { datePublished } : {}),
 		...((dateModified || datePublished) ? { dateModified: dateModified || datePublished } : {}),
@@ -69,6 +82,17 @@ if (type === 'software') {
 				'@type': 'Answer',
 				text: f.answer,
 			},
+		})),
+	};
+} else if (type === 'breadcrumb' && breadcrumbs.length > 0) {
+	schemaObj = {
+		'@context': 'https://schema.org',
+		'@type': 'BreadcrumbList',
+		itemListElement: breadcrumbs.map((b, i) => ({
+			'@type': 'ListItem',
+			position: i + 1,
+			name: b.name,
+			item: b.item,
 		})),
 	};
 }
