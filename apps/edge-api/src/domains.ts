@@ -10,10 +10,13 @@ export async function dnsAnswers(name: string, type: 'A' | 'AAAA' | 'TXT'): Prom
 	const params = new URLSearchParams({ name, type });
 	const response = await fetch(`https://cloudflare-dns.com/dns-query?${params}`, {
 		headers: { accept: 'application/dns-json' },
-		redirect: 'error',
+		redirect: 'manual',
 		signal: AbortSignal.timeout(4000),
 	});
-	if (!response.ok) throw new Error('DNS lookup failed');
+	if (!response.ok) {
+		await response.body?.cancel();
+		throw new Error('DNS lookup failed');
+	}
 	const result = await response.json<{ Status: number; Answer?: { type: number; data: string }[] }>();
 	if (result.Status === 3) return [];
 	if (result.Status !== 0) throw new Error('DNS lookup failed');
