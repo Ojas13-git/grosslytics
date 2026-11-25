@@ -64,7 +64,7 @@ Paddle copies transaction `customData` onto the created subscription and subsequ
 
 <figure>
   <a href="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" aria-label="Open full-size Paddle screenshot">
-    <img src="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" alt="Paddle documentation showing customData in the Checkout open method instructions." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" alt="Paddle documentation showing customData in the Checkout open method instructions." width="1265" height="712" loading="eager" decoding="async" />
   </a>
   <figcaption>Public Paddle documentation explaining customData on Paddle.Checkout.open. Captured 2026-11-08. <a href="https://developer.paddle.com/build/transactions/custom-data/#pass-custom-data-to-checkout">Source: Paddle</a>.</figcaption>
 </figure>

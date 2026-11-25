@@ -1,6 +1,13 @@
-# How to Attribute Razorpay Payments to Traffic Sources
-
-> Canonical URL: https://grosslytics.com/blog/razorpay-revenue-attribution/ | Updated: 2026-11-24
+---
+layout: "../../layouts/Article.astro"
+title: "How to Attribute Razorpay Payments to Traffic Sources"
+description: "Connect Razorpay Standard Checkout payments to UTMs using payment notes and signed payment.captured webhooks. Includes INR setup and current limits."
+primaryKeyword: "razorpay revenue attribution"
+format: "how-to"
+visualReview: {"decision":"include-screenshots","reason":"Real public provider documentation screenshots explain the checkout identity fields; demo views are labeled and do not imply a live payment test."}
+updatedDate: "2026-11-24"
+pubDate: "2026-11-08"
+---
 
 Attach the Grosslytics visitor ID (`gl_vid`) inside Razorpay Standard Checkout `notes.visitor_id` and point Razorpay's `payment.captured` webhook at your Grosslytics endpoint. That links every captured INR or international payment back to the exact UTM campaign, blog post, or AI search answer that brought the buyer.
 
@@ -47,7 +54,7 @@ Grosslytics reads `payload.payment.entity.notes.visitor_id` from the captured pa
 
 <figure>
   <a href="/images/comparisons/razorpay-2026-11-08-d36efcde0745.jpg" aria-label="Open full-size Razorpay screenshot">
-    <img src="/images/comparisons/razorpay-2026-11-08-d36efcde0745.jpg" alt="Razorpay integration documentation showing the client-side Checkout setup section." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/razorpay-2026-11-08-d36efcde0745.jpg" alt="Razorpay integration documentation showing the client-side Checkout setup section." width="1265" height="712" loading="eager" decoding="async" />
   </a>
   <figcaption>Public Razorpay Standard Checkout instructions distinguishing the client checkout callback from the webhook URL. Captured 2026-11-08. <a href="https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps#2-integrate-with-checkout-on-client-side">Source: Razorpay</a>.</figcaption>
 </figure>

@@ -1,6 +1,6 @@
 ---
 interface Props {
-	type: 'software' | 'article' | 'faq' | 'breadcrumb';
+	type: 'software' | 'webapp' | 'article' | 'faq' | 'breadcrumb';
 	title?: string;
 	description?: string;
 	url?: string;
@@ -48,6 +48,27 @@ if (type === 'software') {
 				url: 'https://grosslytics.com/',
 			},
 		],
+	};
+} else if (type === 'webapp') {
+	schemaObj = {
+		'@context': 'https://schema.org',
+		'@type': 'WebApplication',
+		name: title || 'SaaS Payment Fee & Analytics Cost Calculator',
+		url: url || 'https://grosslytics.com/tools/payment-fee-calculator/',
+		applicationCategory: 'FinanceApplication',
+		operatingSystem: 'All',
+		isAccessibleForFree: true,
+		offers: {
+			'@type': 'Offer',
+			price: '0',
+			priceCurrency: 'USD',
+		},
+		...(description ? { description } : {}),
+		publisher: {
+			'@type': 'Organization',
+			name: 'Grosslytics',
+			url: 'https://grosslytics.com/',
+		},
 	};
 } else if (type === 'article') {
 	schemaObj = {

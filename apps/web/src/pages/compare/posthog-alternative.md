@@ -42,7 +42,7 @@ Grosslytics is our product; PostHog specifications reflect [PostHog's pricing](h
 
 <figure>
   <a href="/images/comparisons/posthog-homepage-2026-11-08.jpg" aria-label="Open full-size PostHog screenshot">
-    <img src="/images/comparisons/posthog-homepage-2026-11-08.jpg" alt="PostHog homepage showing its platform overview and illustrative AI analysis with sample data." width="1025" height="1226" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/posthog-homepage-2026-11-08.jpg" alt="PostHog homepage showing its platform overview and illustrative AI analysis with sample data." width="1025" height="1226" loading="eager" decoding="async" />
   </a>
   <figcaption>PostHog homepage with illustrative sample data. Captured November 8, 2026. <a href="https://posthog.com/">View source page</a>.</figcaption>
 </figure>

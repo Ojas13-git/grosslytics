@@ -1,6 +1,12 @@
-# PostHog Alternative: Focused SaaS Revenue Analytics
-
-> Canonical URL: https://grosslytics.com/compare/posthog-alternative/ | Updated: 2026-11-24
+---
+layout: "../../layouts/Article.astro"
+title: "PostHog Alternative: Focused SaaS Revenue Analytics"
+description: "Compare PostHog with Grosslytics for Stripe and multi-gateway revenue attribution: setup overhead, pricing, measured tracker size, and tradeoffs."
+primaryKeyword: "posthog alternative revenue analytics"
+format: "comparison"
+updatedDate: "2026-11-24"
+pubDate: "2026-11-08"
+---
 
 Choose **PostHog** if you want product telemetry, session replays, feature flags, and SQL insights inside one suite with a 1-million-event free analytics tier. Choose **Grosslytics** as a focused PostHog alternative when your main question is which traffic sources, blog posts, and AI answers generate paying customers after payment-gateway fees and ad spend, with a `1.8 KB` tracker and zero SQL setup.
 
@@ -36,7 +42,7 @@ Grosslytics is our product; PostHog specifications reflect [PostHog's pricing](h
 
 <figure>
   <a href="/images/comparisons/posthog-homepage-2026-11-08.jpg" aria-label="Open full-size PostHog screenshot">
-    <img src="/images/comparisons/posthog-homepage-2026-11-08.jpg" alt="PostHog homepage showing its platform overview and illustrative AI analysis with sample data." width="1025" height="1226" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/posthog-homepage-2026-11-08.jpg" alt="PostHog homepage showing its platform overview and illustrative AI analysis with sample data." width="1025" height="1226" loading="eager" decoding="async" />
   </a>
   <figcaption>PostHog homepage with illustrative sample data. Captured November 8, 2026. <a href="https://posthog.com/">View source page</a>.</figcaption>
 </figure>

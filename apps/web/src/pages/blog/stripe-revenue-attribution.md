@@ -1,11 +1,11 @@
 ---
 layout: "../../layouts/Article.astro"
-title: "How to Track Stripe Revenue by Traffic Source"
-description: "Connect Stripe Checkout and Payment Links to visitor sources, configure signed webhooks, and track fees, renewals, and refunds in Grosslytics."
-primaryKeyword: "stripe revenue attribution analytics"
+title: "How to Track Stripe Revenue by UTM & Traffic Source"
+description: "Connect Stripe Checkout and Payment Links to UTMs and visitor sources, configure signed webhooks, and track fees, renewals, and refunds in Grosslytics."
+primaryKeyword: "stripe utm revenue tracking"
 format: "how-to"
 visualReview: {"decision":"include-screenshots","reason":"Real public provider documentation screenshots explain the checkout identity fields; demo views are labeled and do not imply a live payment test."}
-updatedDate: "2026-11-24"
+updatedDate: "2026-11-25"
 pubDate: "2026-11-08"
 ---
 
@@ -72,7 +72,7 @@ Stripe passes `client_reference_id` to `checkout.session.completed`, which handl
 
 <figure>
   <a href="/images/comparisons/stripe-2026-11-08-2e93d133b219.jpg" aria-label="Open full-size Stripe screenshot">
-    <img src="/images/comparisons/stripe-2026-11-08-2e93d133b219.jpg" alt="Stripe documentation showing client_reference_id for Payment Link reconciliation." width="1280" height="720" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/stripe-2026-11-08-2e93d133b219.jpg" alt="Stripe documentation showing client_reference_id for Payment Link reconciliation." width="1280" height="720" loading="eager" decoding="async" />
   </a>
   <figcaption>Public Stripe documentation for the client reference field used to connect a Payment Link checkout to a visitor. Captured 2026-11-08. <a href="https://docs.stripe.com/payment-links/url-parameters#streamline-reconciliation-with-a-url-parameter">Source: Stripe</a>.</figcaption>
 </figure>

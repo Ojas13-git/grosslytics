@@ -1,6 +1,13 @@
-# How to Self-Host Revenue Analytics on Cloudflare D1
-
-> Canonical URL: https://grosslytics.com/blog/cloudflare-d1-web-analytics/ | Updated: 2026-11-24
+---
+layout: "../../layouts/Article.astro"
+title: "How to Self-Host Revenue Analytics on Cloudflare D1"
+description: "Deploy Grosslytics on Cloudflare Workers and D1 in five steps. Understand free-tier limits, queue costs, prebuilt and source install paths, and verification."
+primaryKeyword: "self hosted web analytics cloudflare d1"
+format: "how-to"
+visualReview: {"decision":"include-screenshots","reason":"Real Cloudflare D1 pricing documentation explains the database allowance; the real public Grosslytics demo illustrates the reporting interface with clearly identified sample data."}
+updatedDate: "2026-11-24"
+pubDate: "2026-11-08"
+---
 
 Deploy Grosslytics on your own Cloudflare account in five steps using `npx grosslytics@latest install --free` (or `bun run setup` from source), then check your Workers, D1, and Queues free-tier budgets before sending live traffic. Checking all four meters together ensures your self-hosted revenue analytics stack runs smoothly inside Cloudflare's allowances.
 
@@ -28,7 +35,7 @@ Check current [Workers pricing](https://developers.cloudflare.com/workers/platfo
 
 <figure>
   <a href="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" aria-label="Open full-size Cloudflare D1 screenshot">
-    <img src="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" alt="Cloudflare D1 billing table showing free daily reads, writes and total storage limits." width="1269" height="714" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" alt="Cloudflare D1 billing table showing free daily reads, writes and total storage limits." width="1269" height="714" loading="eager" decoding="async" />
   </a>
   <figcaption>Cloudflare's public D1 pricing documentation shows the database allowance. Captured 2026-11-08. <a href="https://developers.cloudflare.com/d1/platform/pricing/#billing-metrics">Source: Cloudflare D1</a>.</figcaption>
 </figure>

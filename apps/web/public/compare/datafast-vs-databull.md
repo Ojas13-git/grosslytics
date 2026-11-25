@@ -1,6 +1,12 @@
-# DataFast vs DataBull vs Grosslytics: Costs & Features
-
-> Canonical URL: https://grosslytics.com/compare/datafast-vs-databull/ | Updated: 2026-11-24
+---
+layout: "../../layouts/Article.astro"
+title: "DataFast vs DataBull vs Grosslytics: Costs & Features"
+description: "Compare DataFast, DataBull, and Grosslytics across 12 criteria, annual cost scenarios, attribution models, and measured tracker sizes."
+primaryKeyword: "datafast vs databull"
+format: "comparison"
+updatedDate: "2026-11-24"
+pubDate: "2026-11-08"
+---
 
 Choose **DataFast** for zero-ops managed revenue tracking (from $9/month) with Shopify and WooCommerce support, **DataBull** for a closed-source $49 one-time Cloudflare setup with Creem support, and **Grosslytics** for open-source (AGPL-3.0) Cloudflare or $5.99/month Cloud analytics covering 10 payment gateways (including Paddle and Razorpay) with automatic fee and ad-spend profit reporting.
 
@@ -38,7 +44,7 @@ Sources: [DataFast](https://datafa.st/), [DataBull](https://databull.app/), [Dat
 
 <figure>
   <a href="/images/comparisons/datafast-public-demo-2026-11-08.jpg" aria-label="Open full-size DataFast screenshot">
-    <img src="/images/comparisons/datafast-public-demo-2026-11-08.jpg" alt="DataFast public demo showing visitors, attributed revenue and a daily traffic chart." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/datafast-public-demo-2026-11-08.jpg" alt="DataFast public demo showing visitors, attributed revenue and a daily traffic chart." width="1265" height="712" loading="eager" decoding="async" />
   </a>
   <figcaption>DataFast public demo. Captured November 8, 2026. <a href="https://datafa.st/demo">View source page</a>.</figcaption>
 </figure>

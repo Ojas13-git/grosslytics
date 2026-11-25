@@ -44,7 +44,7 @@ Note that switching from Plausible's zero-identifier model to Grosslytics' `loca
 
 <figure>
   <a href="/images/comparisons/plausible-public-demo-2026-11-08.jpg" aria-label="Open full-size Plausible screenshot">
-    <img src="/images/comparisons/plausible-public-demo-2026-11-08.jpg" alt="Plausible public live demo showing unique visitors, total pageviews, and daily traffic charts." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/plausible-public-demo-2026-11-08.jpg" alt="Plausible public live demo showing unique visitors, total pageviews, and daily traffic charts." width="1265" height="712" loading="eager" decoding="async" />
   </a>
   <figcaption>Plausible public live demo. Captured November 8, 2026. <a href="https://plausible.io/plausible.io">View source page</a>.</figcaption>
 </figure>

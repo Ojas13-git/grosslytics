@@ -2,24 +2,39 @@
 import type { MarkdownInstance } from 'astro';
 import Page from '../../layouts/Page.astro';
 import SchemaJsonLd from '../../components/seo/SchemaJsonLd.astro';
-const articles = Object.values(import.meta.glob<MarkdownInstance<{title: string; description: string}>>('./*.md', { eager: true }))
-    .sort((a, b) => a.frontmatter.title.localeCompare(b.frontmatter.title));
+
+const mdItems = Object.values(import.meta.glob<MarkdownInstance<{ title: string; description: string }>>('./*.md', { eager: true })).map((article) => ({
+	href: `${article.url}/`,
+	title: article.frontmatter.title,
+	description: article.frontmatter.description,
+}));
+const items = [
+	...mdItems,
+	{
+		href: '/compare/ga4-alternative/',
+		title: 'Google Analytics 4 Alternative for SaaS Revenue Attribution',
+		description: 'Compare Google Analytics 4 purchase events with Grosslytics payment webhooks. See what each tool measures and how to verify net revenue by channel.',
+	},
+].sort((a, b) => a.title.localeCompare(b.title));
+
 const breadcrumbs = [
-    { name: 'Home', item: 'https://grosslytics.com/' },
-    { name: 'Compare', item: 'https://grosslytics.com/compare/' },
+	{ name: 'Home', item: 'https://grosslytics.com/' },
+	{ name: 'Compare', item: 'https://grosslytics.com/compare/' },
 ];
 ---
+
 <Page title="Compare revenue analytics tools | Grosslytics" description="Compare analytics tools by payment support, hosting, attribution and cost. These comparisons are published by Grosslytics; choose the fit for your requirements.">
-    <SchemaJsonLd slot="head" type="breadcrumb" breadcrumbs={breadcrumbs} />
-    <main class="mx-auto max-w-3xl px-5 py-16">
-        <h1 class="text-4xl font-semibold tracking-tight">Compare revenue analytics tools</h1>
-        <p class="mt-4 text-ink-2">Compare analytics tools by payment support, hosting, attribution, and cost. Use the <a class="underline" href="/tools/payment-fee-calculator/">payment fee calculator</a> to model net margins or browse our <a class="underline" href="/blog/">revenue setup guides</a>.</p>
-        <ul class="mt-8">
-            {articles.map(article => <li class="border-b border-line py-6">
-                <h2 class="text-xl font-semibold"><a class="underline" href={`${article.url}/`}>{article.frontmatter.title}</a></h2>
-                <p class="mt-2 text-ink-2">{article.frontmatter.description}</p>
-            </li>)}
-    <li class="border-b border-line py-6"><h2 class="text-xl font-semibold"><a class="underline" href="/compare/ga4-alternative/">Google Analytics 4 Alternative for SaaS Revenue Attribution</a></h2><p class="mt-2 text-ink-2">Compare GA4 purchase events with Grosslytics payment webhooks, fee deductions, and self-hosted data control.</p></li>
-        </ul>
-    </main>
+	<SchemaJsonLd slot="head" type="breadcrumb" breadcrumbs={breadcrumbs} />
+	<main class="mx-auto max-w-3xl px-5 py-16">
+		<h1 class="text-4xl font-semibold tracking-tight">Compare revenue analytics tools</h1>
+		<p class="mt-4 text-ink-2">Compare analytics tools by payment support, hosting, attribution, and cost. Use the <a class="underline" href="/tools/payment-fee-calculator/">payment fee calculator</a> to model net margins or browse our <a class="underline" href="/blog/">revenue setup guides</a>.</p>
+		<ul class="mt-8">
+			{items.map((item) => (
+				<li class="border-b border-line py-6">
+					<h2 class="text-xl font-semibold"><a class="underline" href={item.href}>{item.title}</a></h2>
+					<p class="mt-2 text-ink-2">{item.description}</p>
+				</li>
+			))}
+		</ul>
+	</main>
 </Page>

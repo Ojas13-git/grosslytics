@@ -16,7 +16,7 @@ const breadcrumbs = [
 const author = { '@type': 'Person', name: 'David Mill', url: 'https://grosslytics.com/authors/david-mill/', sameAs: ['https://www.linkedin.com/in/david-mill/', 'https://x.com/handancorp'] };
 ---
 
-<Page title={title} description={description}>
+<Page title={title} description={description} ogType="article" publishedTime={pubDate} modifiedTime={updatedDate || pubDate}>
 	<Fragment slot="head">
 		<SchemaJsonLd type="article" title={title} description={description} url={canonicalURL} image={ogImage} datePublished={pubDate} dateModified={updatedDate || pubDate} author={author} />
 		<SchemaJsonLd type="breadcrumb" breadcrumbs={breadcrumbs} />

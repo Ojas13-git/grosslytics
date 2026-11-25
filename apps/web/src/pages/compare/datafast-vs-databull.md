@@ -44,7 +44,7 @@ Sources: [DataFast](https://datafa.st/), [DataBull](https://databull.app/), [Dat
 
 <figure>
   <a href="/images/comparisons/datafast-public-demo-2026-11-08.jpg" aria-label="Open full-size DataFast screenshot">
-    <img src="/images/comparisons/datafast-public-demo-2026-11-08.jpg" alt="DataFast public demo showing visitors, attributed revenue and a daily traffic chart." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/datafast-public-demo-2026-11-08.jpg" alt="DataFast public demo showing visitors, attributed revenue and a daily traffic chart." width="1265" height="712" loading="eager" decoding="async" />
   </a>
   <figcaption>DataFast public demo. Captured November 8, 2026. <a href="https://datafa.st/demo">View source page</a>.</figcaption>
 </figure>

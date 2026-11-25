@@ -1,6 +1,13 @@
-# How to Track Polar & Dodo Payments Revenue by Channel
-
-> Canonical URL: https://grosslytics.com/blog/polar-dodo-payments-analytics/ | Updated: 2026-11-24
+---
+layout: "../../layouts/Article.astro"
+title: "How to Track Polar & Dodo Payments Revenue by Channel"
+description: "Attribute Polar, Dodo Payments, and Lemon Squeezy sales to traffic sources. Configure checkout metadata and verify renewals, refunds, and webhooks."
+primaryKeyword: "dodo payments polar revenue analytics"
+format: "how-to"
+visualReview: {"decision":"include-screenshots","reason":"Real public provider documentation screenshots explain the checkout identity fields; demo views are labeled and do not imply a live payment test."}
+updatedDate: "2026-11-24"
+pubDate: "2026-11-08"
+---
 
 Send the Grosslytics visitor ID in each Merchant of Record's own parameter (`reference_id` for Polar links, `metadata_visitor_id` for Dodo links, and `checkout[custom][visitor_id]` for Lemon Squeezy links) and point signed payment webhooks at Grosslytics. Every verified order then credits the exact campaign, post, or AI search answer that brought the customer.
 
@@ -50,7 +57,7 @@ Use persistent Polar Checkout Links rather than copying temporary Checkout Sessi
 
 <figure>
   <a href="/images/comparisons/polar-2026-11-08-fd34a928ab51.jpg" aria-label="Open full-size Polar screenshot">
-    <img src="/images/comparisons/polar-2026-11-08-fd34a928ab51.jpg" alt="Polar checkout-link documentation showing reference_id and UTM metadata parameters." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/polar-2026-11-08-fd34a928ab51.jpg" alt="Polar checkout-link documentation showing reference_id and UTM metadata parameters." width="1265" height="712" loading="eager" decoding="async" />
   </a>
   <figcaption>Public Polar documentation showing reference metadata carried by a checkout link. Captured 2026-11-08. <a href="https://polar.sh/docs/features/checkout/links#attribution-and-reference-metadata">Source: Polar</a>.</figcaption>
 </figure>

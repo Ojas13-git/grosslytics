@@ -35,7 +35,7 @@ Check current [Workers pricing](https://developers.cloudflare.com/workers/platfo
 
 <figure>
   <a href="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" aria-label="Open full-size Cloudflare D1 screenshot">
-    <img src="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" alt="Cloudflare D1 billing table showing free daily reads, writes and total storage limits." width="1269" height="714" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/cloudflare-d1-2026-11-08-d799dbdce4a1.jpg" alt="Cloudflare D1 billing table showing free daily reads, writes and total storage limits." width="1269" height="714" loading="eager" decoding="async" />
   </a>
   <figcaption>Cloudflare's public D1 pricing documentation shows the database allowance. Captured 2026-11-08. <a href="https://developers.cloudflare.com/d1/platform/pricing/#billing-metrics">Source: Cloudflare D1</a>.</figcaption>
 </figure>

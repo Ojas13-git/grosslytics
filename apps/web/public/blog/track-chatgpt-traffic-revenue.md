@@ -1,6 +1,13 @@
-# How to Track ChatGPT Traffic Through to Real Revenue
-
-> Canonical URL: https://grosslytics.com/blog/track-chatgpt-traffic-revenue/ | Updated: 2026-11-24
+---
+layout: "../../layouts/Article.astro"
+title: "How to Track ChatGPT Traffic Through to Real Revenue"
+description: "Identify ChatGPT visits by tag and referrer, carry the visitor into checkout and match payments. Includes a Stripe sandbox test and the limits of the data."
+primaryKeyword: "track ChatGPT traffic revenue"
+format: "how-to"
+visualReview: {"decision":"include-screenshots","reason":"A real capture of the public demo's Sources panel shows where AI sources appear next to revenue. It is labeled as sample data and is not evidence of performance."}
+updatedDate: "2026-11-24"
+pubDate: "2026-11-09"
+---
 
 Capture `utm_source=chatgpt.com` or the `chatgpt.com` referrer when a visitor lands, attach their visitor ID (`gl_vid`) to checkout, and match the signed payment webhook back to the visit. In our Stripe sandbox test, a tagged ChatGPT visit carried cleanly into checkout and credited a $9.00 payment ($8.44 net) to `chatgpt.com` under AI Search.
 
@@ -83,7 +90,7 @@ Compare net revenue per visitor across channels, inspecting both first-touch and
 
 <figure>
   <a href="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" aria-label="Open full-size Grosslytics screenshot">
-    <img src="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" alt="Grosslytics Sources panel listing chatgpt.com and perplexity.ai as AI search with visitors, net revenue and revenue per visitor." width="1232" height="830" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" alt="Grosslytics Sources panel listing chatgpt.com and perplexity.ai as AI search with visitors, net revenue and revenue per visitor." width="1232" height="830" loading="eager" decoding="async" />
   </a>
   <figcaption>The Sources panel in the Grosslytics public demo, showing sample data. Captured 2026-11-09. <a href="https://grosslytics.com/app/demo">Source: Grosslytics</a>.</figcaption>
 </figure>

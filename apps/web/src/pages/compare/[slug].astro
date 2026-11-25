@@ -54,7 +54,7 @@ export function getStaticPaths() {
 				],
 				theyLead: ['Free, with very deep reporting', 'Google Ads and Search Console integration', 'Industry-standard tooling and support'],
 				weDiffer: ['Payment amounts from signed webhooks', 'Visitor IDs stored without cookies', 'Net revenue per visitor with provider fee estimates'],
-				verified: '2026-11-21',
+				verified: '2026-11-25',
 				sources: [
 					{ label: 'GA4 purchase events', url: 'https://developers.google.com/analytics/devguides/collection/ga4/set-up-ecommerce' },
 					{ label: 'GA4 data retention', url: 'https://support.google.com/analytics/answer/7667196' },
@@ -74,6 +74,7 @@ const breadcrumbs = [
 	{ name: 'Compare', item: 'https://grosslytics.com/compare/' },
 	{ name: `${competitor} alternative`, item: canonicalURL },
 ];
+const author = { '@type': 'Person', name: 'David Mill', url: 'https://grosslytics.com/authors/david-mill/', sameAs: ['https://www.linkedin.com/in/david-mill/', 'https://x.com/handancorp'] };
 const related = [
 	{ href: '/compare/datafast-alternative/', name: 'DataFast' },
 	{ href: '/compare/databull-alternative/', name: 'DataBull' },
@@ -85,7 +86,7 @@ const related = [
 const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 ---
 
-<Page title={title} description={description}>
+<Page title={title} description={description} ogType="article" publishedTime="2026-11-06" modifiedTime={lastVerifiedDate}>
 	<Fragment slot="head">
 		<SchemaJsonLd
 			type="article"
@@ -95,6 +96,7 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 			image={ogImage}
 			datePublished="2026-11-06"
 			dateModified={lastVerifiedDate}
+			author={author}
 		/>
 		<SchemaJsonLd type="faq" faqs={faqs} />
 		<SchemaJsonLd type="breadcrumb" breadcrumbs={breadcrumbs} />
@@ -117,7 +119,7 @@ const h2 = 'text-[28px] font-semibold tracking-[-0.02em] text-ink';
 				<h1 class="text-[clamp(36px,5.5vw,56px)] font-semibold leading-[1.06] tracking-[-0.035em]">{h1}</h1>
 				<p class="mt-5 text-[21px] leading-relaxed text-ink-2">{answer}</p>
 				<p class="mt-6 text-[13px] text-ink-3">
-					Published by Grosslytics, which makes the product compared here · <time datetime={lastVerifiedDate}>Updated {lastVerifiedDate}</time>
+					By <a href="/authors/david-mill/" class="underline hover:text-ink">David Mill</a> · Published by Grosslytics, which makes the product compared here · <time datetime={lastVerifiedDate}>Updated {lastVerifiedDate}</time>
 				</p>
 			</header>
 

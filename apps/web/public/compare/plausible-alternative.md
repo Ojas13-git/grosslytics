@@ -1,6 +1,12 @@
-# Plausible Alternative for SaaS Revenue Attribution
-
-> Canonical URL: https://grosslytics.com/compare/plausible-alternative/ | Updated: 2026-11-24
+---
+layout: "../../layouts/Article.astro"
+title: "Plausible Alternative for SaaS Revenue Attribution"
+description: "Compare Plausible revenue goals with Grosslytics payment webhooks, including renewals, full refunds, gateway fees, and observed LTV."
+primaryKeyword: "plausible revenue tracking alternative"
+format: "comparison"
+updatedDate: "2026-11-24"
+pubDate: "2026-11-08"
+---
 
 Keep **Plausible** if simple, cookie-free pageviews and browser-side ecommerce purchase events cover your reporting needs. Choose **Grosslytics** as a Plausible alternative when you need subscription renewals tied back to the original traffic source via Stripe, Paddle, Polar, Dodo, or Razorpay webhooks, plus net revenue after processor fees and ad spend.
 
@@ -38,7 +44,7 @@ Note that switching from Plausible's zero-identifier model to Grosslytics' `loca
 
 <figure>
   <a href="/images/comparisons/plausible-public-demo-2026-11-08.jpg" aria-label="Open full-size Plausible screenshot">
-    <img src="/images/comparisons/plausible-public-demo-2026-11-08.jpg" alt="Plausible public live demo showing unique visitors, total pageviews, and daily traffic charts." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/plausible-public-demo-2026-11-08.jpg" alt="Plausible public live demo showing unique visitors, total pageviews, and daily traffic charts." width="1265" height="712" loading="eager" decoding="async" />
   </a>
   <figcaption>Plausible public live demo. Captured November 8, 2026. <a href="https://plausible.io/plausible.io">View source page</a>.</figcaption>
 </figure>

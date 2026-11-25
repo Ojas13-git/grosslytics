@@ -64,14 +64,14 @@ const faqs = [
 	{ question: 'What makes Grosslytics different from Google Analytics or Plausible?', answer: 'Those tools count visits. Grosslytics also receives your payment webhooks, so every sale is tied to the post, search or AI answer that brought the buyer, and shown after gateway fees and ad spend.' },
 	{ question: 'Which payment providers work?', answer: 'Stripe, Paddle, Polar, Lemon Squeezy, Razorpay, Cashfree, Gumroad, PayPal, Dodo Payments and RevenueCat (app-store purchases), through signed or keyed webhooks. Stripe is the most tested; the others are built to each provider’s documented format. Full Stripe, Paddle, Dodo and Gumroad refunds are handled automatically, and sales tax is never counted as revenue.' },
 	{ question: 'What does self-hosted mean?', answer: 'Grosslytics runs on your own Cloudflare account: a Worker, a D1 database and a queue. Your visitor and revenue data never passes through our servers, and Cloudflare’s free tier covers most small sites.' },
-	{ question: 'Do I need to write code?', answer: 'No. You paste one script tag and one webhook URL. The setup at /start checks each step for you against real data.' },
+	{ question: 'Do I need to write code?', answer: 'No. You paste one script tag and one webhook URL. The setup at /start/ checks each step for you against real data.' },
 	{ question: 'What about cookies and GDPR?', answer: 'Grosslytics sets no cookies and stores no IP addresses. A random visitor ID is kept in your site’s browser storage so a sale can be matched to the visit, and buyer emails are masked. Rules differ by country, so check whether your visitors need a notice or consent.' },
 	{ question: 'Will ad blockers break it?', answer: 'The tracker posts to a neutral /api/event path on your own API with a plain request, which EasyPrivacy and uBlock Origin’s privacy list did not block in our tests.' },
 	{ question: 'Can I ask an AI agent about my numbers?', answer: 'Yes. Your API includes an MCP server, so Claude Code, Cursor or Windsurf can answer questions like “which channel earned the most per visitor this month?”' },
 	{ question: 'Can I track several sites or client sites?', answer: 'Yes. Self-hosting has no site limit; each site has its own ID, currency and timezone.' },
 	{ question: 'I use DataFast. Is switching hard?', answer: 'Swap the script tag and point your payment webhook at your Grosslytics API. Existing data-fast-goal attributes on your buttons keep working.' },
 	{ question: 'Is Grosslytics open source?', answer: 'Yes, under the AGPL-3.0 license. The code is on GitHub, and self-hosting it is free with every feature, in exchange for a “Powered by Grosslytics” link in your site’s footer: the dashboard opens once the link is found. Lifetime and Indie Cloud need no link. If you change it and offer it to others as a service, the AGPL asks you to share those changes; a Lifetime license removes that requirement.' },
-	{ question: 'Is hosting available, or only self-hosting?', answer: 'Self-hosting is live today and free with a footer link back to us. Indie Cloud (hosted by us at $5.99/month for up to 100,000 events with a 14-day free trial) has an open waitlist at /start?plan=cloud.' },
+	{ question: 'Is hosting available, or only self-hosting?', answer: 'Self-hosting is live today and free with a footer link back to us. Indie Cloud (hosted by us at $5.99/month for up to 100,000 events with a 14-day free trial) has an open waitlist at /start/?plan=cloud.' },
 	{ question: 'If self-hosting is free, why buy Lifetime?', answer: 'Lifetime ($29 once) is the easy way to self-host, and it pays for the work. You get no footer link to add; priority email support; and a commercial license, so you can modify it or run it for clients without the AGPL’s share-your-changes rule.' },
 ];
 const plans = [
@@ -93,7 +93,7 @@ const plans = [
 		<section class="px-5 pt-20 pb-16 text-center sm:pt-28">
 			<p class="eyebrow mb-4">Open-source web &amp; revenue analytics</p>
 			<h1 class="mx-auto max-w-[14ch] text-[clamp(44px,8vw,88px)] font-semibold leading-[1.04] tracking-[-0.04em]">
-				Gross is vanity.
+				Gross is vanity.{' '}
 				<span class="block text-ink-3">Net is what you keep.</span>
 			</h1>
 			<p class="mx-auto mt-6 max-w-[36rem] text-[19px] leading-relaxed text-ink-2 sm:text-[21px]">
@@ -317,7 +317,7 @@ const plans = [
 						<ul class="mt-6 flex-1 space-y-2 border-t border-line pt-6 text-[15px]">
 							{p.items.map((i) => <li>{i}</li>)}
 						</ul>
-						<a href={`/start?plan=${p.id}`} class={`btn mt-8 ${p.featured ? 'btn-primary' : 'bg-card ring-1 ring-line hover:ring-ink-3'}`}>{p.cta}</a>
+						<a href={`/start/?plan=${p.id}`} class={`btn mt-8 ${p.featured ? 'btn-primary' : 'bg-card ring-1 ring-line hover:ring-ink-3'}`}>{p.cta}</a>
 					</article>
 				))}
 			</div>

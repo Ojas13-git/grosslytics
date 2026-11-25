@@ -90,7 +90,7 @@ Compare net revenue per visitor across channels, inspecting both first-touch and
 
 <figure>
   <a href="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" aria-label="Open full-size Grosslytics screenshot">
-    <img src="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" alt="Grosslytics Sources panel listing chatgpt.com and perplexity.ai as AI search with visitors, net revenue and revenue per visitor." width="1232" height="830" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" alt="Grosslytics Sources panel listing chatgpt.com and perplexity.ai as AI search with visitors, net revenue and revenue per visitor." width="1232" height="830" loading="eager" decoding="async" />
   </a>
   <figcaption>The Sources panel in the Grosslytics public demo, showing sample data. Captured 2026-11-09. <a href="https://grosslytics.com/app/demo">Source: Grosslytics</a>.</figcaption>
 </figure>

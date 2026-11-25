@@ -1,6 +1,13 @@
-# How to Track Paddle Revenue & Renewals by Source
-
-> Canonical URL: https://grosslytics.com/blog/paddle-revenue-attribution/ | Updated: 2026-11-24
+---
+layout: "../../layouts/Article.astro"
+title: "How to Track Paddle Revenue & Renewals by Source"
+description: "Attribute Paddle Billing transactions and renewals to traffic sources using customData and signed webhooks. Covers full refunds, taxes, and fees."
+primaryKeyword: "paddle revenue attribution"
+format: "how-to"
+visualReview: {"decision":"include-screenshots","reason":"Real public provider documentation screenshots explain the checkout identity fields; demo views are labeled and do not imply a live payment test."}
+updatedDate: "2026-11-24"
+pubDate: "2026-11-08"
+---
 
 Pass the Grosslytics visitor ID into Paddle Checkout as `customData.visitor_id` and point Paddle's `transaction.completed`, `adjustment.created`, and `adjustment.updated` webhooks at your Grosslytics endpoint. Paddle propagates that ID to subscriptions and future renewals, tying initial sales, recurring charges, and approved full refunds directly to each marketing source.
 
@@ -57,7 +64,7 @@ Paddle copies transaction `customData` onto the created subscription and subsequ
 
 <figure>
   <a href="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" aria-label="Open full-size Paddle screenshot">
-    <img src="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" alt="Paddle documentation showing customData in the Checkout open method instructions." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" alt="Paddle documentation showing customData in the Checkout open method instructions." width="1265" height="712" loading="eager" decoding="async" />
   </a>
   <figcaption>Public Paddle documentation explaining customData on Paddle.Checkout.open. Captured 2026-11-08. <a href="https://developer.paddle.com/build/transactions/custom-data/#pass-custom-data-to-checkout">Source: Paddle</a>.</figcaption>
 </figure>

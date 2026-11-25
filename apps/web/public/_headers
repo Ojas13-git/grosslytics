@@ -2,8 +2,13 @@
   Strict-Transport-Security: max-age=31536000
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
-  Referrer-Policy: no-referrer
+  Referrer-Policy: strict-origin-when-cross-origin
   Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
+
+/app/*
+  Referrer-Policy: no-referrer
+/license/*
+  Referrer-Policy: no-referrer
 
 /blog/paddle-revenue-attribution.md
   Link: <https://grosslytics.com/blog/paddle-revenue-attribution/>; rel="canonical"
@@ -23,6 +28,8 @@
   Link: <https://grosslytics.com/compare/plausible-alternative/>; rel="canonical"
 /compare/posthog-alternative.md
   Link: <https://grosslytics.com/compare/posthog-alternative/>; rel="canonical"
+/compare/ga4-alternative.md
+  Link: <https://grosslytics.com/compare/ga4-alternative/>; rel="canonical"
 /blog/cloudflare-d1-web-analytics.md
   Link: <https://grosslytics.com/blog/cloudflare-d1-web-analytics/>; rel="canonical"
 /blog/track-chatgpt-traffic-revenue.md

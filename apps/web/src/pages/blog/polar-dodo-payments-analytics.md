@@ -57,7 +57,7 @@ Use persistent Polar Checkout Links rather than copying temporary Checkout Sessi
 
 <figure>
   <a href="/images/comparisons/polar-2026-11-08-fd34a928ab51.jpg" aria-label="Open full-size Polar screenshot">
-    <img src="/images/comparisons/polar-2026-11-08-fd34a928ab51.jpg" alt="Polar checkout-link documentation showing reference_id and UTM metadata parameters." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/polar-2026-11-08-fd34a928ab51.jpg" alt="Polar checkout-link documentation showing reference_id and UTM metadata parameters." width="1265" height="712" loading="eager" decoding="async" />
   </a>
   <figcaption>Public Polar documentation showing reference metadata carried by a checkout link. Captured 2026-11-08. <a href="https://polar.sh/docs/features/checkout/links#attribution-and-reference-metadata">Source: Polar</a>.</figcaption>
 </figure>
