@@ -10,7 +10,8 @@ export async function dnsAnswers(name: string, type: 'A' | 'AAAA' | 'TXT'): Prom
 	const params = new URLSearchParams({ name, type });
 	const response = await fetch(`https://cloudflare-dns.com/dns-query?${params}`, {
 		headers: { accept: 'application/dns-json' },
-		redirect: 'error',
+		// Workers support manual redirects here. The non-2xx check below rejects them.
+		redirect: 'manual',
 		signal: AbortSignal.timeout(4000),
 	});
 	if (!response.ok) throw new Error('DNS lookup failed');
