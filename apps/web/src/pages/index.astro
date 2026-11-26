@@ -45,35 +45,45 @@ const features = [
 	{ title: 'Ad spend from a CSV', body: 'Load daily spend exported from Meta, Google, X or LinkedIn Ads and see MER and profit per channel.' },
 ];
 const compares = [
-	{ href: '/compare/datafast-alternative/', name: 'DataFast' },
-	{ href: '/compare/databull-alternative/', name: 'DataBull' },
-	{ href: '/compare/plausible-alternative/', name: 'Plausible' },
-	{ href: '/compare/ga4-alternative/', name: 'Google Analytics 4' },
+	{ href: '/compare/datafast-alternative/', label: 'Grosslytics vs', name: 'DataFast' },
+	{ href: '/compare/databull-alternative/', label: 'Grosslytics vs', name: 'DataBull' },
+	{ href: '/compare/datafast-vs-databull/', label: '3-way compare', name: 'DataFast vs DataBull' },
+	{ href: '/compare/plausible-alternative/', label: 'Grosslytics vs', name: 'Plausible' },
+	{ href: '/compare/posthog-alternative/', label: 'Grosslytics vs', name: 'PostHog' },
+	{ href: '/compare/ga4-alternative/', label: 'Grosslytics vs', name: 'Google Analytics 4' },
+];
+const guides = [
+	{ href: '/blog/track-chatgpt-traffic-revenue/', title: 'Track ChatGPT traffic to revenue', desc: 'Capture utm_source=chatgpt.com and chatgpt.com referrers through Stripe checkout.' },
+	{ href: '/blog/stripe-revenue-attribution/', title: 'Stripe revenue attribution', desc: 'Connect Payment Links, Checkout Sessions, and signed webhooks to traffic sources.' },
+	{ href: '/blog/paddle-revenue-attribution/', title: 'Paddle Billing attribution', desc: 'Pass customData.visitor_id and handle renewals and full refunds.' },
+	{ href: '/blog/polar-dodo-payments-analytics/', title: 'Polar & Dodo Payments setup', desc: 'Match checkout metadata and webhooks to acquisition channels.' },
+	{ href: '/blog/razorpay-revenue-attribution/', title: 'Razorpay revenue attribution', desc: 'Attach notes.visitor_id on Standard Checkout orders and captured payments.' },
+	{ href: '/blog/cloudflare-d1-web-analytics/', title: 'Self-host on Cloudflare D1', desc: 'Deploy Workers, D1, and Queues on the free tier and size event budgets.' },
 ];
 const faqs = [
 	{ question: 'What makes Grosslytics different from Google Analytics or Plausible?', answer: 'Those tools count visits. Grosslytics also receives your payment webhooks, so every sale is tied to the post, search or AI answer that brought the buyer, and shown after gateway fees and ad spend.' },
-	{ question: 'Which payment providers work?', answer: 'Stripe, Paddle, Polar, Lemon Squeezy, Razorpay, Cashfree, Gumroad, PayPal, Dodo Payments and RevenueCat (app-store purchases), through signed or keyed webhooks. Stripe is the most tested; the others are built to each provider’s documented format. Full Stripe, Gumroad and Dodo refunds are handled automatically, and sales tax is never counted as revenue.' },
+	{ question: 'Which payment providers work?', answer: 'Stripe, Paddle, Polar, Lemon Squeezy, Razorpay, Cashfree, Gumroad, PayPal, Dodo Payments and RevenueCat (app-store purchases), through signed or keyed webhooks. Stripe is the most tested; the others are built to each provider’s documented format. Full Stripe, Paddle, Dodo and Gumroad refunds are handled automatically, and sales tax is never counted as revenue.' },
 	{ question: 'What does self-hosted mean?', answer: 'Grosslytics runs on your own Cloudflare account: a Worker, a D1 database and a queue. Your visitor and revenue data never passes through our servers, and Cloudflare’s free tier covers most small sites.' },
-	{ question: 'Do I need to write code?', answer: 'No. You paste one script tag and one webhook URL. The setup at /start checks each step for you against real data.' },
+	{ question: 'Do I need to write code?', answer: 'No. You paste one script tag and one webhook URL. The setup at /start/ checks each step for you against real data.' },
 	{ question: 'What about cookies and GDPR?', answer: 'Grosslytics sets no cookies and stores no IP addresses. A random visitor ID is kept in your site’s browser storage so a sale can be matched to the visit, and buyer emails are masked. Rules differ by country, so check whether your visitors need a notice or consent.' },
 	{ question: 'Will ad blockers break it?', answer: 'The tracker posts to a neutral /api/event path on your own API with a plain request, which EasyPrivacy and uBlock Origin’s privacy list did not block in our tests.' },
 	{ question: 'Can I ask an AI agent about my numbers?', answer: 'Yes. Your API includes an MCP server, so Claude Code, Cursor or Windsurf can answer questions like “which channel earned the most per visitor this month?”' },
 	{ question: 'Can I track several sites or client sites?', answer: 'Yes. Self-hosting has no site limit; each site has its own ID, currency and timezone.' },
 	{ question: 'I use DataFast. Is switching hard?', answer: 'Swap the script tag and point your payment webhook at your Grosslytics API. Existing data-fast-goal attributes on your buttons keep working.' },
 	{ question: 'Is Grosslytics open source?', answer: 'Yes, under the AGPL-3.0 license. The code is on GitHub, and self-hosting it is free with every feature, in exchange for a “Powered by Grosslytics” link in your site’s footer: the dashboard opens once the link is found. Lifetime and Indie Cloud need no link. If you change it and offer it to others as a service, the AGPL asks you to share those changes; a Lifetime license removes that requirement.' },
-	{ question: 'Is hosting available, or only self-hosting?', answer: 'Both. Self-hosting is free with a footer link back to us. Indie Cloud is hosted for you at $5.99 a month for up to 100,000 events, after a 14-day free trial with no card.' },
+	{ question: 'Is hosting available, or only self-hosting?', answer: 'Self-hosting is live today and free with a footer link back to us. Indie Cloud (hosted by us at $5.99/month for up to 100,000 events with a 14-day free trial) has an open waitlist at /start/?plan=cloud.' },
 	{ question: 'If self-hosting is free, why buy Lifetime?', answer: 'Lifetime ($29 once) is the easy way to self-host, and it pays for the work. You get no footer link to add; priority email support; and a commercial license, so you can modify it or run it for clients without the AGPL’s share-your-changes rule.' },
 ];
 const plans = [
 	{ id: 'self', cta: 'Start free', name: 'Self-host', price: '$0', unit: 'forever', note: 'Open source (AGPL). Runs on your own Cloudflare.', items: ['Every feature, unlimited sites', 'One-command install and updates', '“Powered by Grosslytics” link in your site footer', 'Community help on GitHub'] },
-	{ id: 'cloud', cta: 'Get Indie Cloud', name: 'Indie Cloud', price: '$5.99', unit: 'per month', note: 'We run it. 14-day free trial, no card.', items: ['Everything in Self-host', 'Up to 100,000 events a month', 'Unlimited sites, hosted dashboard'], featured: true },
-	{ id: 'lifetime', cta: 'Get Lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'Self-host the easy way, and back the project.', items: ['Everything in Self-host', 'No footer link needed', 'Priority email support', 'Commercial license: no AGPL obligations'] },
+	{ id: 'cloud', cta: 'Join Cloud waitlist', name: 'Indie Cloud', price: '$5.99', unit: 'per month', note: 'Opening soon. Join the waitlist for a 14-day free trial.', items: ['Everything in Self-host', 'Up to 100,000 events a month', 'Unlimited sites, hosted dashboard'] },
+	{ id: 'lifetime', cta: 'Get Lifetime', name: 'Lifetime', price: '$29', unit: 'one time', note: 'Self-host the easy way, and back the project.', items: ['Everything in Self-host', 'No footer link needed', 'Priority email support', 'Commercial license: no AGPL obligations'], featured: true },
 ];
 ---
 
 <Page
-	title="Grosslytics — Revenue Analytics That Counts What You Keep"
-	description="Grosslytics ties every click, post, and AI search visit to the revenue you actually keep: after Stripe and Razorpay fees and ad spend."
+	title="Grosslytics — Open-Source Stripe & Revenue Analytics"
+	description="Open-source web and revenue analytics on Cloudflare. Tie Stripe, Paddle, Polar, and Razorpay sales to traffic sources and AI search after fees and ad spend."
 >
 	<SchemaJsonLd slot="head" type="software" />
 	<SchemaJsonLd slot="head" type="faq" faqs={faqs} />
@@ -81,13 +91,13 @@ const plans = [
 	<main>
 		<!-- Hero -->
 		<section class="px-5 pt-20 pb-16 text-center sm:pt-28">
-			<p class="eyebrow mb-4">Revenue analytics for founders</p>
+			<p class="eyebrow mb-4">Open-source web &amp; revenue analytics</p>
 			<h1 class="mx-auto max-w-[14ch] text-[clamp(44px,8vw,88px)] font-semibold leading-[1.04] tracking-[-0.04em]">
-				Gross is vanity.
+				Gross is vanity.{' '}
 				<span class="block text-ink-3">Net is what you keep.</span>
 			</h1>
-			<p class="mx-auto mt-6 max-w-[34rem] text-[19px] leading-relaxed text-ink-2 sm:text-[21px]">
-				See which posts, searches and AI answers bring buyers, and what each one earned after fees and ad spend.
+			<p class="mx-auto mt-6 max-w-[36rem] text-[19px] leading-relaxed text-ink-2 sm:text-[21px]">
+				See which blog posts, searches, and ChatGPT answers bring buyers, and what you keep after Stripe, Paddle, or Razorpay fees and ad spend.
 			</p>
 			<div class="mt-9 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
 				<a href="/start/" class="btn btn-primary">Start free</a>
@@ -181,8 +191,8 @@ const plans = [
 				<article class="flex flex-col justify-between rounded-[28px] bg-band p-8">
 					<h3 class="text-[17px] font-semibold text-ink-2">The whole tracker</h3>
 					<div>
-						<p class="font-display text-[72px] font-semibold leading-none tracking-[-0.04em]">1.5<span class="text-[36px] text-ink-3"> KB</span></p>
-						<p class="mt-3 text-ink-2">Compressed. No cookies and no layout shift.</p>
+						<p class="font-display text-[72px] font-semibold leading-none tracking-[-0.04em]">1.8<span class="text-[36px] text-ink-3"> KB</span></p>
+						<p class="mt-3 text-ink-2">Brotli compressed (1,858 bytes). No cookies and no layout shift.</p>
 					</div>
 				</article>
 
@@ -193,6 +203,7 @@ const plans = [
 					<ul class="mt-6 flex flex-wrap gap-2 text-[14px]">
 						{aiEngines.map((e) => <li class="rounded-full bg-card px-3 py-1 ring-1 ring-line">{e}</li>)}
 					</ul>
+					<a href="/blog/track-chatgpt-traffic-revenue/" class="btn-quiet mt-5 inline-block text-[15px]">Track ChatGPT revenue ›</a>
 				</article>
 
 				<!-- MCP -->
@@ -215,6 +226,9 @@ const plans = [
 					<ul class="mt-5 space-y-2 text-ink-2">
 						{gateways.map((g) => <li>{g}</li>)}
 					</ul>
+					<p class="mt-5 text-[14px] text-ink-2">
+						Guides for <a href="/blog/stripe-revenue-attribution/" class="text-accent hover:underline">Stripe</a>, <a href="/blog/paddle-revenue-attribution/" class="text-accent hover:underline">Paddle</a>, <a href="/blog/polar-dodo-payments-analytics/" class="text-accent hover:underline">Polar &amp; Dodo</a>, and <a href="/blog/razorpay-revenue-attribution/" class="text-accent hover:underline">Razorpay</a>.
+					</p>
 				</article>
 
 				<!-- Live -->
@@ -226,7 +240,7 @@ const plans = [
 				<!-- Self-host -->
 				<article class="rounded-[28px] bg-band p-8">
 					<h3 class="text-[24px] font-semibold tracking-[-0.02em]">Yours to run.</h3>
-					<p class="mt-2 text-ink-2">Deploy to your own Cloudflare account in about five minutes. The setup checks each step for you.</p>
+					<p class="mt-2 text-ink-2">Deploy to your own Cloudflare account in one command. See our <a href="/blog/cloudflare-d1-web-analytics/" class="text-accent hover:underline">Cloudflare D1 self-hosting guide</a>.</p>
 					<a href="/start/" class="btn-quiet mt-5 inline-block text-[17px]">Start the setup ›</a>
 				</article>
 			</div>
@@ -284,6 +298,9 @@ const plans = [
 				<p class="mt-4 text-[19px] text-ink-2">Compare entry plans, and see how much of your revenue goes to fees.</p>
 			</div>
 			<RoiCalculator client:visible />
+			<div class="mt-8 text-center">
+				<a href="/tools/payment-fee-calculator/" class="btn-quiet text-[16px]">Open payment gateway &amp; analytics fee calculator ›</a>
+			</div>
 		</section>
 
 		<!-- Pricing -->
@@ -300,7 +317,7 @@ const plans = [
 						<ul class="mt-6 flex-1 space-y-2 border-t border-line pt-6 text-[15px]">
 							{p.items.map((i) => <li>{i}</li>)}
 						</ul>
-						<a href={`/start?plan=${p.id}`} class={`btn mt-8 ${p.featured ? 'btn-primary' : 'bg-card ring-1 ring-line hover:ring-ink-3'}`}>{p.cta}</a>
+						<a href={`/start/?plan=${p.id}`} class={`btn mt-8 ${p.featured ? 'btn-primary' : 'bg-card ring-1 ring-line hover:ring-ink-3'}`}>{p.cta}</a>
 					</article>
 				))}
 			</div>
@@ -312,9 +329,30 @@ const plans = [
 		<!-- Compare -->
 		<section class="mx-auto max-w-[1024px] px-5 pb-24">
 			<h2 class="mb-8 text-center text-[clamp(28px,4vw,40px)] font-semibold leading-[1.1] tracking-[-0.03em]">Coming from another tool?</h2>
-			<ul class="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+			<ul class="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
 				{compares.map((c) => (
-					<li><a href={c.href} class="block rounded-2xl bg-band p-5 text-[15px] hover:ring-1 hover:ring-line"><span class="text-ink-3">Grosslytics vs</span><span class="mt-1 block font-semibold">{c.name} ›</span></a></li>
+					<li><a href={c.href} class="block rounded-2xl bg-band p-5 text-[15px] hover:ring-1 hover:ring-line"><span class="text-ink-3">{c.label}</span><span class="mt-1 block font-semibold">{c.name} ›</span></a></li>
+				))}
+			</ul>
+			<div class="mt-8 text-center">
+				<a href="/compare/" class="btn-quiet text-[16px]">See all tool comparisons ›</a>
+			</div>
+		</section>
+
+		<!-- Revenue guides -->
+		<section class="mx-auto max-w-[1024px] px-5 pb-24">
+			<div class="mb-8 flex flex-wrap items-baseline justify-between gap-4">
+				<h2 class="text-[clamp(28px,4vw,40px)] font-semibold leading-[1.1] tracking-[-0.03em]">Revenue attribution guides</h2>
+				<a href="/blog/" class="btn-quiet text-[16px]">All guides ›</a>
+			</div>
+			<ul class="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+				{guides.map((g) => (
+					<li>
+						<a href={g.href} class="block h-full rounded-2xl bg-band p-5 hover:ring-1 hover:ring-line">
+							<h3 class="text-[16px] font-semibold">{g.title} ›</h3>
+							<p class="mt-1.5 text-[14px] leading-relaxed text-ink-2">{g.desc}</p>
+						</a>
+					</li>
 				))}
 			</ul>
 		</section>

@@ -5,15 +5,26 @@ import SchemaJsonLd from '../components/seo/SchemaJsonLd.astro';
 const { title, description, pubDate, updatedDate } = Astro.props.frontmatter;
 const comparison = Astro.url.pathname.startsWith('/compare/');
 const collection = comparison ? { label: 'Comparisons', href: '/compare/' } : { label: 'Blog', href: '/blog/' };
+const cleanPath = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const canonicalURL = `https://grosslytics.com${cleanPath === '/' ? '/' : `${cleanPath}/`}`;
+const ogImage = `https://grosslytics.com/og${cleanPath === '/' ? '/index' : cleanPath}.png`;
+const breadcrumbs = [
+	{ name: 'Home', item: 'https://grosslytics.com/' },
+	{ name: collection.label, item: `https://grosslytics.com${collection.href}` },
+	{ name: title, item: canonicalURL },
+];
 const author = { '@type': 'Person', name: 'David Mill', url: 'https://grosslytics.com/authors/david-mill/', sameAs: ['https://www.linkedin.com/in/david-mill/', 'https://x.com/handancorp'] };
 ---
 
-<Page title={title} description={description}>
-	<SchemaJsonLd slot="head" type="article" title={title} description={description} datePublished={pubDate} dateModified={updatedDate || pubDate} author={author} />
+<Page title={title} description={description} ogType="article" publishedTime={pubDate} modifiedTime={updatedDate || pubDate}>
+	<Fragment slot="head">
+		<SchemaJsonLd type="article" title={title} description={description} url={canonicalURL} image={ogImage} datePublished={pubDate} dateModified={updatedDate || pubDate} author={author} />
+		<SchemaJsonLd type="breadcrumb" breadcrumbs={breadcrumbs} />
+	</Fragment>
 	<main class="article-shell">
 		<header class="article-heading">
 			<nav class="article-breadcrumb" aria-label="Breadcrumb">
-				<a href="/">Home</a><span aria-hidden="true">/</span><a href={collection.href}>{collection.label}</a>
+				<a href="/">Home</a><span aria-hidden="true">/</span><a href={collection.href}>{collection.label}</a><span aria-hidden="true">/</span><span class="text-ink" aria-current="page">{title}</span>
 			</nav>
 			<h1>{title}</h1>
 			<p class="article-description">{description}</p>

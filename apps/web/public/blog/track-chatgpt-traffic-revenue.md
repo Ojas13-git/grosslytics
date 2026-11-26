@@ -1,127 +1,125 @@
-# How to Track ChatGPT Traffic Through to Real Revenue
+---
+layout: "../../layouts/Article.astro"
+title: "How to Track ChatGPT Traffic Through to Real Revenue"
+description: "Identify ChatGPT visits by tag and referrer, carry the visitor into checkout and match payments. Includes a Stripe sandbox test and the limits of the data."
+primaryKeyword: "track ChatGPT traffic revenue"
+format: "how-to"
+visualReview: {"decision":"include-screenshots","reason":"A real capture of the public demo's Sources panel shows where AI sources appear next to revenue. It is labeled as sample data and is not evidence of performance."}
+updatedDate: "2026-11-24"
+pubDate: "2026-11-09"
+---
 
-> Canonical URL: https://grosslytics.com/blog/track-chatgpt-traffic-revenue/ | Updated: 2026-11-21
-
-We tracked a tagged visit through to a Stripe sandbox payment by keeping the visitor ID from arrival through checkout and matching the payment event. To do the same for ChatGPT traffic, record the `utm_source=chatgpt.com` tag or chatgpt.com referrer when someone arrives. I would treat the result as a partial view: visits without a tag or referrer cannot reliably be identified later.
+Capture `utm_source=chatgpt.com` or the `chatgpt.com` referrer when a visitor lands, attach their visitor ID (`gl_vid`) to checkout, and match the signed payment webhook back to the visit. In our Stripe sandbox test, a tagged ChatGPT visit carried cleanly into checkout and credited a $9.00 payment ($8.44 net) to `chatgpt.com` under AI Search.
 
 ## Key takeaways
 
-- Check for `utm_source=chatgpt.com` on the landing URL and look for `chatgpt.com` in the referrer.
-- GA4 now has an AI Assistant channel, but it only shows revenue if you send purchase events.
-- Clicks with no tag and no referrer land in Direct, so treat your ChatGPT number as a minimum.
-- In our Stripe sandbox test, a tagged visit carried through to a $9.00 payment credited to chatgpt.com.
+- Check for `utm_source=chatgpt.com` on landing URLs and `chatgpt.com` in referrers before any redirect strips query parameters.
+- GA4 includes an AI Assistant channel, though it only records revenue if you instrument ecommerce `purchase` events.
+- Clicks copied without a tag or referrer fall into Direct, so tracked AI revenue represents a minimum baseline.
+- Grosslytics groups ChatGPT, Perplexity, Claude, Gemini, and Copilot under **AI Search** automatically.
 
 ## How does ChatGPT traffic appear in analytics?
 
-A ChatGPT click can arrive in one of three ways, and each one needs different handling.
+A ChatGPT click arrives in one of three forms, and only the first two carry source metadata:
 
-If a ChatGPT Search answer links to your site, open that link and check the landing URL for `utm_source=chatgpt.com`. If your site redirects visitors before analytics runs, check that the tag is still present on the final URL. Analytics can only use the signals it receives.
-
-| What arrives | How to identify it | Usual result |
+| Arrival signal | How to spot it | Attribution result |
 | --- | --- | --- |
-| Tag, with or without a referrer | `utm_source=chatgpt.com` | Identifiable as ChatGPT |
-| Referrer only | Referrer host is chatgpt.com or the older chat.openai.com | Identifiable as ChatGPT |
-| Neither | Nothing to read | Reported as Direct |
+| Tagged link | `utm_source=chatgpt.com` on landing URL | Attributed as `chatgpt.com` (AI Search) |
+| Untagged referrer | HTTP referrer `chatgpt.com` or `chat.openai.com` | Attributed as `chatgpt.com` (AI Search) |
+| Copied bare URL | No tag and no referrer header | Reported as Direct |
 
-A bare URL copied from an answer can arrive without either signal. Keep those visits in Direct when reviewing ChatGPT traffic.
+Make sure your server redirects preserve query strings so `utm_source=chatgpt.com` reaches the landing page where your analytics script runs.
 
-## Can GA4 do this without another tool?
+## Can GA4 track ChatGPT revenue without another tool?
 
-Yes, if GA4 already receives purchase events with a value and currency.
+Yes, if your site already sends ecommerce `purchase` events with `transaction_id`, `value`, and `currency` to GA4.
 
-Google's [default channel documentation](https://support.google.com/analytics/answer/9756891) lists an AI Assistant channel, using the medium `ai-assistant` when the referrer matches its list of assistants. Default channel groups cannot be edited, though you can create a custom one. The same page says the channel excludes AI Overviews and AI Mode, which stay in Organic Search.
+Google's [default channel documentation](https://support.google.com/analytics/answer/9756891) groups `chatgpt.com` into the **AI Assistant** channel (`ai-assistant`). Note that Google AI Overviews and AI Mode remain grouped under Organic Search.
 
-1. Open **Reports → Acquisition → Traffic acquisition** and switch the primary dimension to **Session source**. Look for `chatgpt.com` and check **Sessions** and **Total revenue** on that row. The AI Assistant channel combines multiple sources.
-2. Run a test purchase after opening a tagged link. For a browser-tagged checkout, use **DebugView** to confirm the `purchase` event carries the expected `transaction_id`, `value` and `currency`. Follow Google's [purchase event setup guide](https://developers.google.com/analytics/devguides/collection/ga4/set-up-ecommerce) to verify those fields.
-3. Once the test is available in reports, check which session source gets the revenue. If the purchase appears under another source, trace the checkout handoff and the return to your site. If the purchase event is missing, start with the checkout integration.
+1. Open **Reports -> Acquisition -> Traffic acquisition** and switch the primary dimension to **Session source** to isolate `chatgpt.com` sessions and **Total revenue**.
+2. Open a tagged test URL and complete a test checkout while watching **DebugView** to confirm your `purchase` event matches [Google's ecommerce setup guide](https://developers.google.com/analytics/devguides/collection/ga4/set-up-ecommerce).
+3. Compare **Traffic acquisition** (session-level) with **User acquisition** (first user source) per [Google's acquisition report docs](https://support.google.com/analytics/answer/14731736).
 
-The [Traffic acquisition report documentation](https://support.google.com/analytics/answer/14731736) explains how session attribution differs from **User acquisition**, which groups users by their first source.
+If you want payment attribution backed directly by signed Stripe, Paddle, or Razorpay webhooks without maintaining GA4 ecommerce tags or cookie banners, see [GA4 vs Grosslytics](/compare/ga4-alternative/).
 
 ## How do you connect ChatGPT visits to payments?
 
-Record the source once, keep it with a visitor ID, and let the payment provider return that ID.
+I'll walk through the four-step setup in Grosslytics, though the same visitor-ID handoff works in any webhook-based revenue analytics stack:
 
-I’ll use Grosslytics for these steps, but the same four-part method applies to other analytics tools.
-
-**1. Install the tracker on the pages people land on.**
+**1. Install the tracker on landing pages.**
 
 ```html
 <script defer src="https://grosslytics.com/g.js"
   data-site-id="YOUR_SITE_ID"></script>
 ```
 
-See the [installation guide](/docs/#install) for self-hosting and Content Security Policy settings.
+Check the [installation guide](/docs/#install) for self-hosted domains and Content Security Policy rules.
 
-**2. Check the source is recognised.** Open a page with the tag in a private window, then find that visit in your report:
+**2. Verify `utm_source=chatgpt.com` classification.** Open a private window to:
 
 ```text
 https://your-site.example/?utm_source=chatgpt.com
 ```
 
-Grosslytics groups tagged or referred visits from ChatGPT, Perplexity, Claude, Gemini and Copilot under AI Search.
+Grosslytics automatically groups tagged or referred visits from ChatGPT, Perplexity, Claude, Gemini, and Copilot under **AI Search**.
 
-**3. Carry the visitor into checkout.** Grosslytics adds the visitor ID to supported Stripe Payment Links as `client_reference_id`, which Stripe [returns in the `checkout.session.completed` event](https://docs.stripe.com/payment-links/url-parameters). For checkouts created on your server, follow the [Stripe revenue guide](/blog/stripe-revenue-attribution/). Polar, Dodo Payments and Lemon Squeezy have [their own fields](/blog/polar-dodo-payments-analytics/).
+**3. Forward `gl_vid` into checkout.** Grosslytics decorates Stripe Payment Links automatically with `client_reference_id` ([Stripe URL parameter docs](https://docs.stripe.com/payment-links/url-parameters)). For server-created sessions or other gateways, follow the [Stripe attribution guide](/blog/stripe-revenue-attribution/), [Paddle Billing guide](/blog/paddle-revenue-attribution/), [Polar & Dodo guide](/blog/polar-dodo-payments-analytics/), or [Razorpay guide](/blog/razorpay-revenue-attribution/).
 
-**4. Send signed payment webhooks** to your analytics endpoint, as described in the [payments reference](/docs/#payments). If the tagged visit appears but the sale gets no source credit, check that Stripe received the same visitor ID in `client_reference_id` and that the signed `checkout.session.completed` event reached Grosslytics.
+**4. Connect signed payment webhooks.** Follow the [payments reference](/docs/#payments). If a visit shows under AI Search while its payment stays Unattributed, check that checkout preserved `client_reference_id` or `metadata.visitor_id`.
 
 ## What happened when we tested it?
 
-One tagged visit became one correctly credited sandbox payment.
+One tagged visit carried through checkout into a credited Stripe sandbox payment.
 
-We ran this on November 9, 2026, on a local copy of Grosslytics in a real browser, using a Stripe sandbox and Stripe's published test card. **We typed the tagged URL ourselves. It was not a click from ChatGPT, no real money moved, and one run shows the mechanism works, not how ChatGPT traffic behaves.**
+We ran this test on November 9, 2026, on a local Grosslytics instance in a real browser using Stripe's sandbox test card. We typed the tagged URL directly rather than clicking inside ChatGPT, so this verifies the end-to-end technical pipeline rather than real-world ChatGPT click volume.
 
 | Stage | Observed result |
 | --- | --- |
-| Landing with `utm_source=chatgpt.com` | Accepted by the API and stored as source `chatgpt.com` |
-| Channel stored | AI Search |
-| Moving to the pricing page | Source stayed `chatgpt.com` |
-| Checkout link | `client_reference_id` set to the visitor ID |
+| Landing with `utm_source=chatgpt.com` | Accepted and stored as source `chatgpt.com` |
+| Channel stored | `AI Search` |
+| Navigating to pricing | Source persisted as `chatgpt.com` |
+| Checkout link | `client_reference_id` automatically set to `gl_vid` |
 | Payment recorded | $9.00 gross, $0.56 estimated fee, $8.44 net |
-| Credit | First touch and last touch both `chatgpt.com` |
+| Attribution credit | First touch and last touch both `chatgpt.com` |
 
-The return from Stripe was recorded as a separate Direct (Shared Link) visit. It did not change the credit for this sale, but it can become the last touch for a later purchase by the same person, so first-touch reports are the safer read here.
+Returning from Stripe's hosted success URL logged a separate `Direct (Shared Link)` visit. It did not overwrite credit for that sale, though first-touch attribution protects original AI discovery if a buyer returns days later to make a second purchase.
 
 ## How should you read the report?
 
-Compare net revenue per visitor by source, and look at first and last touch separately.
+Compare net revenue per visitor across channels, inspecting both first-touch and last-touch views.
 
 <figure>
   <a href="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" aria-label="Open full-size Grosslytics screenshot">
-    <img src="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" alt="Grosslytics Sources panel listing chatgpt.com and perplexity.ai as AI search with visitors, net revenue and revenue per visitor." width="1232" height="830" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/grosslytics-2026-11-09-c30745b57ea9.png" alt="Grosslytics Sources panel listing chatgpt.com and perplexity.ai as AI search with visitors, net revenue and revenue per visitor." width="1232" height="830" loading="eager" decoding="async" />
   </a>
   <figcaption>The Sources panel in the Grosslytics public demo, showing sample data. Captured 2026-11-09. <a href="https://grosslytics.com/app/demo">Source: Grosslytics</a>.</figcaption>
 </figure>
 
-First touch shows whether ChatGPT was the buyer's first recorded source. Last touch shows whether it received credit for the payment under the latest recorded source. The [dashboard definitions](/docs/#dashboard) explain each model.
-
-Use the same date range and attribution model when comparing sources. Keep the visitor and purchase counts alongside revenue per visitor so you can see when a single payment drives the result.
+Keep visitor and sale counts next to revenue per visitor so a single high-ticket order is easy to spot against high-volume channels. Check the [dashboard definitions](/docs/#dashboard) for linear (50/50) split details, or compare how Grosslytics handles AI traffic vs other tools in [DataFast alternatives](/compare/datafast-alternative/).
 
 ## What can this method not tell you?
 
-It cannot show the question someone asked, or recover a source that was never sent.
+No analytics tracker can inspect private chat transcripts or recover stripped referrers:
 
-- **Prompts:** the visit carries no record of what the person asked ChatGPT.
-- **Direct traffic:** clicks without a tag or referrer stay in Direct.
-- **Google's AI answers:** clicks from AI Overviews and AI Mode are [counted within Search Console's Web totals](https://developers.google.com/search/docs/appearance/ai-features) and look like Google traffic.
-- **Refunds:** Grosslytics handles full Stripe refunds; partial refunds are not deducted.
-- **Fees:** the fee is an estimate from a configured schedule, so reconcile it with your provider.
-
-Next, open one tagged link on your own site and confirm it appears as AI Search before relying on the report.
+- **Exact prompts:** Referrers and UTMs carry the source domain, never the prompt text a user typed in ChatGPT.
+- **Untagged Direct traffic:** Copied links without `utm_source=chatgpt.com` land in Direct.
+- **Google AI Overviews:** Clicks from Google's AI features arrive inside [Search Console Web totals](https://developers.google.com/search/docs/appearance/ai-features) as Google organic traffic.
+- **Exact processor payouts:** Net revenue subtracts each gateway's published fee schedule (model rates in the [payment fee calculator](/tools/payment-fee-calculator/)).
 
 ## Frequently asked questions
 
 ### What does utm_source=chatgpt.com mean?
 
-It is a campaign tag that identifies `chatgpt.com` as the source of the visit. Anyone can append the tag, which makes it useful for testing your setup.
+OpenAI appends `utm_source=chatgpt.com` to outbound links in ChatGPT Search answers so site owners can isolate ChatGPT referrals from generic traffic.
 
 ### Should I remove utm_source=chatgpt.com from my URLs?
 
-Not before your analytics has read it. If a redirect strips the tag first, the visit can lose its source. Canonical tags can keep the parameter out of search results.
+Never strip it on the server before `g.js` runs, or you erase the attribution signal. Use `<link rel="canonical">` tags (built into Grosslytics pages) so search engines ignore the query parameter.
 
 ### Why does ChatGPT traffic show as Direct?
 
-The visit arrived with no tag and no referrer, for example from a copied link. No analytics tool can identify it after that.
+Desktop apps, privacy browsers, or copied plain URLs omit both the UTM parameter and HTTP referrer header, making them indistinguishable from direct visits.
 
 ### Can I see which ChatGPT prompt led to a sale?
 
-No. You can see the landing page and the payment, but not the prompt.
+No. You see the landing page, reading time, and payment converted from `chatgpt.com`, never the user's private prompt.

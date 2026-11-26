@@ -11,7 +11,7 @@ See which posts, searches and AI answers bring paying customers, and what each o
 [![GitHub stars](https://img.shields.io/github/stars/vidneat/grosslytics?style=flat&logo=github&label=Star)](https://github.com/vidneat/grosslytics/stargazers)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Runs on Cloudflare](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
-![Tracker size](https://img.shields.io/badge/tracker-1.5%20KB-brightgreen)
+![Tracker size](https://img.shields.io/badge/tracker-1.8%20KB-brightgreen)
 ![No cookies](https://img.shields.io/badge/cookies-none-success)
 
 [**Live demo**](https://grosslytics.com/app/demo) · [Website](https://grosslytics.com) · [Docs](https://grosslytics.com/docs/) · [Self-host in one command](#self-host-free)
@@ -182,7 +182,7 @@ packages/cli      the npx grosslytics installer
 
 ## Compare
 
-How Grosslytics differs from other tools: [DataFast](https://grosslytics.com/compare/datafast-alternative/) · [DataBull](https://grosslytics.com/compare/databull-alternative/) · [Plausible](https://grosslytics.com/compare/plausible-alternative/) · [Google Analytics](https://grosslytics.com/compare/ga4-alternative/)
+How Grosslytics differs from other tools: [DataFast](https://grosslytics.com/compare/datafast-alternative/) · [DataBull](https://grosslytics.com/compare/databull-alternative/) · [DataFast vs DataBull](https://grosslytics.com/compare/datafast-vs-databull/) · [Plausible](https://grosslytics.com/compare/plausible-alternative/) · [PostHog](https://grosslytics.com/compare/posthog-alternative/) · [Google Analytics](https://grosslytics.com/compare/ga4-alternative/)
 
 ## Contributing
 

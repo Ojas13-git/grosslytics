@@ -1,35 +1,39 @@
-# How to Track Paddle Revenue & Observed LTV by Source
+---
+layout: "../../layouts/Article.astro"
+title: "How to Track Paddle Revenue & Renewals by Source"
+description: "Attribute Paddle Billing transactions and renewals to traffic sources using customData and signed webhooks. Covers full refunds, taxes, and fees."
+primaryKeyword: "paddle revenue attribution"
+format: "how-to"
+visualReview: {"decision":"include-screenshots","reason":"Real public provider documentation screenshots explain the checkout identity fields; demo views are labeled and do not imply a live payment test."}
+updatedDate: "2026-11-24"
+pubDate: "2026-11-08"
+---
 
-> Canonical URL: https://grosslytics.com/blog/paddle-revenue-attribution/ | Updated: 2026-11-10
-
-I recommend passing the tracked visitor ID into Paddle Checkout as customData.visitor_id and matching it to signed transaction.completed events in Grosslytics. That connects recorded Paddle payments to an acquisition source, but it does not produce normalized MRR or a built-in 90-day cohort LTV report. I would check a recurring event as well as the initial checkout before relying on the attribution.
+Pass the Grosslytics visitor ID into Paddle Checkout as `customData.visitor_id` and point Paddle's `transaction.completed`, `adjustment.created`, and `adjustment.updated` webhooks at your Grosslytics endpoint. Paddle propagates that ID to subscriptions and future renewals, tying initial sales, recurring charges, and approved full refunds directly to each marketing source.
 
 ## Key takeaways
 
-- Use customData in Paddle.js and inspect custom_data in the transaction event; the browser and webhook names differ.
-- Paddle documents custom-data propagation to subscriptions and future transactions, but validate the actual recurring event you receive.
-- Grosslytics removes the tax amount reported in the transaction and estimates the gateway fee; it does not read Paddle settlement earnings as exact net revenue.
-- The current LTV view is historical and all-time, with identity limitations for Paddle; do not label it a 90-day cohort metric or forecast.
+- Pass `customData.visitor_id` into `Paddle.Checkout.open()` and verify `custom_data.visitor_id` arrives on webhook payloads.
+- Subscribe to `transaction.completed` for initial and recurring payments plus `adjustment.created` and `adjustment.updated` for approved full refunds.
+- Grosslytics strips reported Paddle tax automatically and estimates Paddle's 5% + $0.50 fee schedule before attributing net revenue.
+- Check both an initial checkout and one `subscription_recurring` event in sandbox before switching live traffic.
 
 ## What do you need before opening Paddle Checkout?
 
-You need a Paddle Billing product and price, an initialized Paddle.js integration, and a tracked visit with a Grosslytics visitor ID.
+You need a Paddle Billing product and price, an initialized `Paddle.js` integration, and a Grosslytics site ID.
 
-The examples follow Paddle’s documentation and the Grosslytics implementation. Before relying on them for live payments, run a test transaction and check the webhook payload you receive.
+This walkthrough covers **Paddle Billing** (`transaction.completed` and `adjustment.*`), not legacy Paddle Classic. Start in the [Grosslytics setup wizard](/start/), add your domain, and pick the reporting currency matching your Paddle prices.
 
-This guide covers Paddle Billing and transaction.completed, not legacy Paddle Classic events. Start with the [Grosslytics setup flow](/start/), install the tracker and choose a reporting currency that matches the charge currency.
+1. Install `g.js` on your marketing and pricing pages.
+2. Initialize `Paddle.js` with your client-side token.
+3. Configure a sandbox webhook destination in Paddle Developer Tools.
+4. Plan to inspect both one initial purchase and one recurring renewal event.
 
-1. Add the Grosslytics tracker to the acquisition and pricing pages.
-2. Load and initialize Paddle.js with your client-side token.
-3. Keep price selection and application access rules under your existing checkout controls.
-4. Configure a test-mode webhook destination.
-5. Plan to inspect both an initial and recurring transaction.
-
-Use the [tracker guide](/docs#install) if you self-host or need Content Security Policy changes.
+Check the [tracker guide](/docs/#install) if you self-host or serve strict Content Security Policy headers. Looking for a Paddle-ready alternative to DataBull or DataFast? Compare them in [Best DataBull alternatives for Paddle & net revenue](/compare/databull-alternative/).
 
 ## Step 1: How do you pass the visitor ID into Paddle.js?
 
-Read the tracked visitor ID after initialization and include it in the checkout's customData object.
+Read `localStorage.getItem('gl_vid')` after `g.js` loads and attach it inside `Paddle.Checkout.open({ customData })`.
 
 ```html
 <script defer src="https://grosslytics.com/g.js"
@@ -37,7 +41,7 @@ Read the tracked visitor ID after initialization and include it in the checkout'
 <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 ```
 
-In your existing client checkout code:
+In your browser checkout handler:
 
 ```js
 // Browser: initialize once, then call openCheckout from your buy button.
@@ -54,125 +58,100 @@ function openCheckout() {
 }
 ```
 
-Use your real sandbox client-side token and price ID, and change environment/token appropriately for production. If tracking is unavailable, the example still opens checkout without claiming attribution. [Source: Paddle.Checkout.open parameters](https://developer.paddle.com/paddle-js/methods/paddle-checkout-open/).
+Switch `Paddle.Environment` and your token for production. If `gl_vid` is missing, checkout still opens normally without blocking the buyer. [Source: Paddle.Checkout.open parameters](https://developer.paddle.com/paddle-js/methods/paddle-checkout-open/).
 
-Paddle documents that transaction custom data is copied to the created subscription, then to future subscription transactions. In a transaction webhook the field is custom_data, not the Paddle.js spelling customData. [Source: custom-data propagation](https://developer.paddle.com/build/transactions/custom-data/).
+Paddle copies transaction `customData` onto the created subscription and subsequent recurring transactions, where webhooks expose it under `custom_data.visitor_id`. [Source: Paddle custom-data propagation](https://developer.paddle.com/build/transactions/custom-data/).
 
 <figure>
   <a href="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" aria-label="Open full-size Paddle screenshot">
-    <img src="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" alt="Paddle documentation showing customData in the Checkout open method instructions." width="1265" height="712" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/paddle-2026-11-08-a31e49cd3ad1.jpg" alt="Paddle documentation showing customData in the Checkout open method instructions." width="1265" height="712" loading="eager" decoding="async" />
   </a>
-  <figcaption>Public Paddle documentation explaining customData on Paddle.Checkout.open; the code shown is a vendor example. Captured 2026-11-08. <a href="https://developer.paddle.com/build/transactions/custom-data/#pass-custom-data-to-checkout">Source: Paddle</a>.</figcaption>
+  <figcaption>Public Paddle documentation explaining customData on Paddle.Checkout.open. Captured 2026-11-08. <a href="https://developer.paddle.com/build/transactions/custom-data/#pass-custom-data-to-checkout">Source: Paddle</a>.</figcaption>
 </figure>
 
-The ID joins the payment to an existing visit; it is not an authentication credential. A source such as an SEO page or ad campaign still depends on the visit evidence and tags recorded before checkout.
+## Step 2: Which Paddle webhook events should Grosslytics receive?
 
-## Step 2: Which Paddle webhook should Grosslytics receive?
-
-Configure transaction.completed, adjustment.created and adjustment.updated to reach the Paddle-specific endpoint and save the matching signing secret in Payments settings.
+Subscribe your Grosslytics Paddle webhook URL to `transaction.completed`, `adjustment.created`, and `adjustment.updated`, and save the endpoint signing secret in Payments settings.
 
 ```text
 https://YOUR_ANALYTICS_DOMAIN/api/webhooks/paddle?siteId=YOUR_SITE_ID
 ```
 
-The current handler reads the completed transaction ID, currency, reported totals, custom_data.visitor_id and origin. It recognizes a recurring payment when origin is subscription_recurring. [Source: transaction.completed event](https://developer.paddle.com/webhooks/transactions/transaction-completed/).
-
-| Field or control | Provider-side location | Current Grosslytics use |
+| Paddle field | Provider payload path | How Grosslytics uses it |
 | --- | --- | --- |
-| Visitor ID | data.custom_data.visitor_id | Matches the stored visit |
-| Paid amount | data.details.totals.grand_total | Starting amount before tax exclusion |
-| Tax | data.details.totals.tax | Removed from revenue when supplied |
-| Currency | data.currency_code | Must match the site's reporting currency |
-| Recurring origin | data.origin | subscription_recurring marks a renewal |
-| Signature | Paddle-Signature header | Checked against the raw body and destination secret |
+| Visitor ID | `data.custom_data.visitor_id` | Links the sale to the tracked visit |
+| Paid amount | `data.details.totals.grand_total` | Starting total before tax exclusion |
+| Tax | `data.details.totals.tax` | Deducted so sales tax is never counted as revenue |
+| Currency | `data.currency_code` | Must match your site's reporting currency |
+| Renewal flag | `data.origin` | Marks `subscription_recurring` charges as renewals |
+| Signature | `Paddle-Signature` header | Verified against the raw body and signing secret |
 
-Do not replace the raw payload with a reformatted JSON string before signature verification. Paddle describes its signature and timestamp checks in [webhook signature verification](https://developer.paddle.com/webhooks/about/signature-verification/).
+Keep the raw JSON request body intact for signature checks, as described in [Paddle webhook signature verification](https://developer.paddle.com/webhooks/about/signature-verification/) and the [transaction.completed event docs](https://developer.paddle.com/webhooks/transactions/transaction-completed/). See the [payment integration reference](/docs/#payments) for configuration details.
 
-The [payment integration reference](/docs#payments) describes the current Grosslytics settings. A delivered webhook must still be inspected for the correct visitor, amount and currency before you call the attribution complete.
+## Step 3: How do you test and compare sources in sandbox?
 
-## Step 3: How do you compare sources after a test purchase?
-
-Open the source report and compare the matched payment under a consistent attribution model and reporting currency.
-
-Start from a controlled campaign URL:
+Open a campaign-tagged link, complete a Paddle sandbox checkout, and verify the credited source on the dashboard.
 
 ```text
 https://your-site.example/pricing?utm_source=google&utm_medium=cpc&utm_campaign=paddle-test
 ```
 
-Complete a sandbox checkout, confirm that its completed transaction carries the visitor ID, and inspect the resulting source. Repeat with a recurring transaction rather than assuming a successful initial purchase proves later matching.
+Confirm the initial transaction appears under `google` and inspect a sandbox subscription renewal (`origin: "subscription_recurring"`) as well as a test full refund (`adjustment.created` / `adjustment.updated`).
 
 <figure>
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
+  <figcaption>Grosslytics public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
-The [dashboard definitions](/docs#dashboard) describe first-touch, last-touch and the first-last endpoint split, which can credit the same payment differently.
+Use the [dashboard definitions](/docs/#dashboard) to compare first-touch, last-touch, and 50/50 linear attribution across your sources.
 
-A page revenue report answers a different question from acquisition-source credit: visitors can read several pages before purchasing. Do not sum overlapping page rows as if each were an exclusive revenue allocation.
+## How are Paddle tax, fees, and refunds handled?
 
-## How are Paddle tax and fees represented?
+Grosslytics removes reported VAT/sales tax first, then subtracts Paddle's standard 5% + $0.50 fee schedule to calculate net revenue per channel.
 
-The current implementation removes reported tax, then subtracts its configured fee estimate from the payment amount.
-
-Consider an illustrative USD 120 payment containing USD 20 in tax. With the current 5% plus USD 0.50 fee assumption applied to the full payment, estimated fees are USD 6.50 and the resulting revenue after tax and estimated fees is USD 93.50.
+On a $120 Paddle payment that includes $20 in sales tax, Grosslytics strips the $20 tax and estimates $6.50 in fees (`5% of $120 + $0.50`), recording $93.50 in net revenue:
 
 ```text
 paid = 12000 cents
 tax = 2000 cents
 estimated_fee = round(12000 * 500 / 10000) + 50 = 650 cents
-revenue_after_tax_and_estimated_fee = 12000 - 2000 - 650 = 9350 cents
+net_after_tax_and_fee = 12000 - 2000 - 650 = 9350 cents
 ```
 
-That calculation describes the application's default, not your negotiated Paddle fee or exact payout. The current Paddle extractor does not use actual totals.fee or earnings as the stored fee amount. Approved full refunds remove a sale; partial refunds need separate reconciliation.
+Because negotiated volume pricing or multi-currency settlements can differ from the default schedule, compare totals with your Paddle settlement statements. Approved full refunds (`adjustment.created` and `adjustment.updated`) automatically reverse the sale from revenue, while partial refunds require manual reconciliation. Model fee impacts across providers with the [payment fee calculator](/tools/payment-fee-calculator/).
 
-Mixed-currency payments are rejected rather than converted. Ad spend is a separate input, and subtracting fees and ad spend still excludes other business operating costs.
+## How Grosslytics reports Paddle renewals and LTV
 
-## Is observed LTV the same as 90-day cohort LTV or MRR?
+Grosslytics tracks cumulative historical LTV by first-touch source by summing net receipts (including `subscription_recurring` charges) per visitor ID.
 
-No: observed LTV is accumulated historical value, a cohort fixes an acquisition group and observation window, and MRR normalizes recurring subscription value.
+For example, if two visitors acquired from a blog post generate $300 in combined net charges (initial purchases plus renewals), the LTV panel reports $150 per customer for that channel. Because Paddle webhooks do not populate email identity matching in the current handler, matching across renewals relies on `custom_data.visitor_id` remaining intact on the subscription. Note that this shows cumulative observed revenue per customer rather than normalized MRR or a fixed 90-day cohort window.
 
-Grosslytics' current LTV report groups all-time successful net receipts by first-touch source and divides them by distinct customers using available identifiers. The Paddle extractor does not populate an email identity, so matching normally relies on visitor IDs; multiple browsers or cleared storage can affect the apparent customer count.
+## Pre-launch verification checklist
 
-For an illustrative source with USD 300 in accumulated net receipts and two identified customers, observed LTV is USD 150. A 90-day figure might be different if some of those receipts occurred after the customer's first 90 days.
+1. Confirm `gl_vid` appears in `custom_data.visitor_id` on the sandbox `transaction.completed` webhook.
+2. Verify `Paddle-Signature` validation succeeds with `HTTP 200` (check your signing secret if `401`).
+3. Confirm reported tax is deducted and currency matches your site settings.
+4. Test a `subscription_recurring` renewal and verify it credits the original acquisition channel.
+5. Trigger a full refund adjustment and confirm the sale is marked refunded in Grosslytics.
 
-```text
-observed_all_time_ltv = 300 / 2 = 150
-normalized_monthly_value_of_annual_1200_plan = 1200 / 12 = 100
-```
-
-Selecting a 90-day traffic range does not turn the all-time LTV panel into a cohort report. A proper cohort analysis needs a stable subscriber identity, acquisition date, fixed observation cutoff and refund-adjusted payment history; use an appropriate export or reporting system for that requirement.
-
-## What should you test before using the report for acquisition decisions?
-
-Reconcile a complete payment lifecycle with the provider records and keep unsupported metrics out of the interpretation.
-
-1. Confirm the visitor and transaction carry the same ID.
-2. Validate signature verification and successful ingestion.
-3. Check the currency and tax amount.
-4. Reconcile the fee estimate with actual provider charges.
-5. Test a recurring transaction and its source.
-6. Inspect an unmatched buyer and avoid inventing its source.
-7. Reconcile partial refunds and other adjustments separately; the handler only applies approved full refunds.
-
-Keep revenue attribution, recurring receipts and cohort metrics distinct. Next, validate one initial and one recurring Paddle transaction before using the source report to allocate spend.
+If you also use Polar or Dodo Payments alongside Paddle, follow our [Polar and Dodo attribution guide](/blog/polar-dodo-payments-analytics/).
 
 ## Frequently asked questions
 
-### Does Grosslytics calculate Paddle MRR?
-
-It records supported completed transactions and identifies subscription_recurring origin. That is not the same as normalizing active subscriptions into a dedicated MRR metric.
-
-### Does choosing a 90-day range show 90-day cohort LTV?
-
-No. The current LTV query is all-time by first source. Cohort LTV needs an acquisition group and a fixed observation period, not just a traffic date range.
-
 ### Why is customData spelled differently in the webhook?
 
-Paddle.js accepts customData, while Paddle transaction objects and webhook payloads use custom_data. Grosslytics reads the webhook field.
+`Paddle.js` accepts camelCase `customData` in the browser, while Paddle's REST API and webhook payloads return snake_case `custom_data`. Grosslytics reads `data.custom_data.visitor_id` from the webhook.
 
-### Does the net value equal my exact Paddle payout?
+### Does Grosslytics handle Paddle refunds automatically?
 
-No. The current implementation excludes reported tax and subtracts a configured fee estimate. Settlement timing, actual fees, adjustments and refunds require separate reconciliation.
+Yes, for approved full refunds sent via `adjustment.created` and `adjustment.updated`. Partial, pending, or rejected adjustments are ignored and need manual reconciliation.
+
+### Does choosing a 90-day date range show 90-day cohort LTV?
+
+No. The LTV panel aggregates all-time net receipts per identified customer grouped by their first-touch source, independent of the traffic date range selected for the main chart.
+
+### Does the net figure match my exact Paddle payout?
+
+Grosslytics strips reported tax and applies the standard 5% + $0.50 fee estimate rather than reading exact settlement `totals.fee` or foreign-exchange payouts, so use Paddle statements for final bookkeeping.

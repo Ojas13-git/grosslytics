@@ -1,5 +1,6 @@
 ---
 import Page from '../layouts/Page.astro';
+import SchemaJsonLd from '../components/seo/SchemaJsonLd.astro';
 import { FOOTER_SNIPPET } from '@grosslytics/shared/constants';
 
 // Every statement here is checked against the code: tracker (packages/tracker/src/g.ts), webhooks (apps/edge-api/src/routes/webhooks.ts),
@@ -63,9 +64,27 @@ const h2 = 'scroll-mt-20 text-[28px] font-semibold tracking-[-0.02em] text-ink';
 const h3 = 'mt-8 text-[19px] font-semibold text-ink';
 const pre = 'mt-4 overflow-x-auto rounded-xl bg-band p-4 font-mono text-[13.5px] leading-relaxed text-ink ring-1 ring-line';
 const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
+const docsTitle = 'Grosslytics Docs: Setup, Payment Webhooks, API & MCP';
+const docsDescription = 'Install the 1.8 KB Grosslytics tracker, track goals, connect Stripe, Paddle, Polar, Dodo, or Razorpay webhooks, and query revenue via REST API or MCP.';
+const docsBreadcrumbs = [
+	{ name: 'Home', item: 'https://grosslytics.com/' },
+	{ name: 'Docs', item: 'https://grosslytics.com/docs/' },
+];
 ---
 
-<Page title="Docs — Grosslytics" description="Install the Grosslytics tracker, track goals, connect Stripe, Polar, Lemon Squeezy, Paddle, Razorpay, Cashfree, Gumroad, PayPal, Dodo Payments or RevenueCat, and use the API and MCP server.">
+<Page title={docsTitle} description={docsDescription}>
+	<Fragment slot="head">
+		<SchemaJsonLd
+			type="article"
+			title={docsTitle}
+			description={docsDescription}
+			url="https://grosslytics.com/docs/"
+			image="https://grosslytics.com/og/docs.png"
+			datePublished="2026-11-08"
+			dateModified="2026-11-25"
+		/>
+		<SchemaJsonLd type="breadcrumb" breadcrumbs={docsBreadcrumbs} />
+	</Fragment>
 	<main>
 		<article class="mx-auto max-w-[760px] px-5 pt-14 pb-24">
 			<header>
@@ -83,7 +102,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
 				<h2 id="install" class={h2}>Install the tracker</h2>
-				<p>Sign in at <a class="text-accent hover:underline" href="/app">/app</a> and add your site. You get a site ID such as <code class={code}>gl_8b5e717a83ac</code>. Paste this into the <code class={code}>&lt;head&gt;</code> of every page:</p>
+				<p>Sign in at <a class="text-accent hover:underline" href="/app/">/app</a> and add your site. You get a site ID such as <code class={code}>gl_8b5e717a83ac</code>. Paste this into the <code class={code}>&lt;head&gt;</code> of every page:</p>
 				<pre class={pre}><code>{`<script defer src="${ORIGIN}/g.js" data-site-id="YOUR_SITE_ID"></script>`}</code></pre>
 				<p>Self-hosting? Use your own domain in <code class={code}>src</code>. The tracker sends events to the same domain it was loaded from, at <code class={code}>/api/event</code>. To send them somewhere else, add <code class={code}>data-api="https://your-api/api/event"</code>.</p>
 				<p>Events are only accepted from the site’s own domain, its subdomains, and <code class={code}>localhost</code>. The tracker records a pageview when the page loads, plus reading time and scroll depth when the visitor leaves.</p>
@@ -104,7 +123,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
 				<h2 id="payments" class={h2}>Connect payments</h2>
-				<p>In your payment provider, add a webhook pointing at the URL below. Then, in <a class="text-accent hover:underline" href="/app">/app</a> → <strong>Payments</strong>, paste the webhook’s signing secret. Unsigned webhooks, or ones with the wrong signature, are rejected.</p>
+				<p>In your payment provider, add a webhook pointing at the URL below. Then, in <a class="text-accent hover:underline" href="/app/">/app</a> → <strong>Payments</strong>, paste the webhook’s signing secret. Unsigned webhooks, or ones with the wrong signature, are rejected.</p>
 				<pre class={pre}><code>{`${ORIGIN}/api/webhooks/{provider}?siteId=YOUR_SITE_ID`}</code></pre>
 				<p>To credit a sale to a channel, the payment has to carry the buyer’s visitor ID. On checkout links in your page, the tracker adds it for you. Anywhere else, read it in the browser and pass it to your checkout:</p>
 				<pre class={pre}><code>{`const visitorId = localStorage.getItem('gl_vid');`}</code></pre>
@@ -122,14 +141,15 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 
 				<h3 class={h3}>Currencies, tax and refunds</h3>
 				<p>Each site reports in one currency: USD, EUR, GBP or INR, chosen when you add the site. A payment in another currency is refused (HTTP 422), never converted or mixed in. Full Stripe and Dodo refunds, approved full Paddle refunds, and Gumroad refunds remove the sale from revenue. Partial refunds and other providers’ refunds need separate reconciliation.</p>
-				<p>Sales tax or VAT that the provider reports (Stripe, Paddle, Polar, Lemon Squeezy, Dodo Payments, RevenueCat) is taken out of revenue, because it is not yours to keep. Net revenue then subtracts the payment fee: PayPal’s and RevenueCat’s real fee from the event, and each other provider’s standard published fee, which is an estimate.</p>
+				<p>Sales tax or VAT that the provider reports (Stripe, Paddle, Polar, Lemon Squeezy, Dodo Payments, RevenueCat) is taken out of revenue, because it is not yours to keep. Net revenue then subtracts the payment fee: PayPal’s and RevenueCat’s real fee from the event, and each other provider’s standard published fee, which you can preview in the <a class="text-accent hover:underline" href="/tools/payment-fee-calculator/">payment fee calculator</a>.</p>
+				<p>Provider walkthroughs: <a class="text-accent hover:underline" href="/blog/stripe-revenue-attribution/">Stripe</a>, <a class="text-accent hover:underline" href="/blog/paddle-revenue-attribution/">Paddle Billing</a>, <a class="text-accent hover:underline" href="/blog/polar-dodo-payments-analytics/">Polar and Dodo Payments</a>, and <a class="text-accent hover:underline" href="/blog/razorpay-revenue-attribution/">Razorpay</a>.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
 				<h2 id="switch" class={h2}>Switch from DataFast, DataBull, Plausible or Umami</h2>
-				<p>Replace the old script tag with the Grosslytics one. Your existing goal attributes and JavaScript calls keep working (see <a class="text-accent hover:underline" href="#goals">Track goals</a>), and Stripe metadata named <code class={code}>datafast_visitor_id</code> or <code class={code}>databull_visitor_id</code> is read like <code class={code}>visitor_id</code>.</p>
+				<p>Replace the old script tag with the Grosslytics one. Your existing goal attributes and JavaScript calls keep working (see <a class="text-accent hover:underline" href="#goals">Track goals</a>), and Stripe metadata named <code class={code}>datafast_visitor_id</code> or <code class={code}>databull_visitor_id</code> is read like <code class={code}>visitor_id</code>. See how Grosslytics compares with <a class="text-accent hover:underline" href="/compare/datafast-alternative/">DataFast</a>, <a class="text-accent hover:underline" href="/compare/databull-alternative/">DataBull</a>, <a class="text-accent hover:underline" href="/compare/plausible-alternative/">Plausible</a>, <a class="text-accent hover:underline" href="/compare/posthog-alternative/">PostHog</a>, and <a class="text-accent hover:underline" href="/compare/ga4-alternative/">Google Analytics 4</a>.</p>
 				<p>One change: those tools keep the visitor ID in a cookie, and Grosslytics sets no cookies. If your server reads the <code class={code}>datafast_visitor_id</code> cookie to fill Stripe metadata, send <code class={code}>localStorage.getItem('gl_vid')</code> from the browser instead.</p>
-				<p><strong>Bring your history:</strong> in <a class="text-accent hover:underline" href="/app">/app</a> → <strong>Import past Stripe payments</strong>, paste a restricted key with read access to Checkout Sessions and Invoices. Past sales arrive with their real dates. They show as Unattributed, because no visits were recorded for them.</p>
+				<p><strong>Bring your history:</strong> in <a class="text-accent hover:underline" href="/app/">/app</a> → <strong>Import past Stripe payments</strong>, paste a restricted key with read access to Checkout Sessions and Invoices. Past sales arrive with their real dates. They show as Unattributed, because no visits were recorded for them.</p>
 			</section>
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
@@ -148,7 +168,7 @@ const code = 'rounded bg-band px-1.5 py-0.5 font-mono text-[0.85em] text-ink';
 				<p><strong>Next.js</strong> (<code class={code}>middleware.ts</code>):</p>
 				<pre class={pre}><code>{`import { NextResponse, type NextRequest } from 'next/server';
 
-const AI = /GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|PerplexityBot|anthropic-ai|Google-Extended|Bytespider|Applebot-Extended|meta-externalagent|CCBot/;
+const AI = /GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-SearchBot|Claude-User|PerplexityBot|Perplexity-User|anthropic-ai|Google-Extended|Bytespider|Applebot-Extended|meta-externalagent|CCBot/;
 
 export function middleware(req: NextRequest) {
   const ua = req.headers.get('user-agent') || '';
@@ -165,7 +185,7 @@ export function middleware(req: NextRequest) {
 				<pre class={pre}><code>{`export default {
   async fetch(req, env, ctx) {
     const ua = req.headers.get('user-agent') || '';
-    if (/GPTBot|ClaudeBot|PerplexityBot|OAI-SearchBot|ChatGPT-User|Google-Extended/.test(ua)) {
+    if (/GPTBot|ClaudeBot|Claude-SearchBot|Claude-User|PerplexityBot|Perplexity-User|OAI-SearchBot|ChatGPT-User|Google-Extended/.test(ua)) {
       ctx.waitUntil(fetch('${ORIGIN}/api/crawl', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.GROSSLYTICS_CRAWL_KEY },
@@ -188,7 +208,7 @@ export function middleware(req: NextRequest) {
 
 			<section class="prose-g mt-16 text-[17px] leading-relaxed">
 				<h2 id="api" class={h2}>API</h2>
-				<p>Create a read-only token in <a class="text-accent hover:underline" href="/app">/app</a> → <strong>API tokens</strong>. Each token reads one site and is shown once. Send it as a bearer token:</p>
+				<p>Create a read-only token in <a class="text-accent hover:underline" href="/app/">/app</a> → <strong>API tokens</strong>. Each token reads one site and is shown once. Send it as a bearer token:</p>
 				<pre class={pre}><code>{`curl -H "Authorization: Bearer gl_pat_…" \\
   "${ORIGIN}/api/stats/dashboard?siteId=YOUR_SITE_ID&range=30d"`}</code></pre>
 				<p>Read-only tokens can only make GET requests for their own site. The writes below need the owner’s API_TOKEN (self-hosting) or a signed-in dashboard session.</p>

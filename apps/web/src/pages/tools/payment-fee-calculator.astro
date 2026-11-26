@@ -1,0 +1,95 @@
+---
+import Page from '../../layouts/Page.astro';
+import SchemaJsonLd from '../../components/seo/SchemaJsonLd.astro';
+import RoiCalculator from '../../components/marketing/RoiCalculator.tsx';
+
+export const prerender = true;
+
+const title = 'SaaS Payment Fee & Analytics Cost Calculator | Grosslytics';
+const description = 'Calculate annual Stripe processing fees (2.9% + $0.30), compare gateway fee rates across Paddle, Polar, Dodo, and Razorpay, and compare analytics plans.';
+const canonicalURL = 'https://grosslytics.com/tools/payment-fee-calculator/';
+const breadcrumbs = [
+	{ name: 'Home', item: 'https://grosslytics.com/' },
+	{ name: 'Payment Fee Calculator', item: canonicalURL },
+];
+
+const feeRates = [
+	{ gateway: 'Stripe (US domestic cards)', rate: '2.9% + $0.30', on100: '$3.20', net100: '$96.80', guide: '/blog/stripe-revenue-attribution/' },
+	{ gateway: 'Paddle (Merchant of Record)', rate: '5.0% + $0.50', on100: '$5.50', net100: '$94.50', guide: '/blog/paddle-revenue-attribution/' },
+	{ gateway: 'Dodo Payments (Merchant of Record)', rate: '4.0% + $0.40', on100: '$4.40', net100: '$95.60', guide: '/blog/polar-dodo-payments-analytics/' },
+	{ gateway: 'Polar (platform fee)', rate: '5.0% + $0.00', on100: '$5.00', net100: '$95.00', guide: '/blog/polar-dodo-payments-analytics/' },
+	{ gateway: 'Razorpay (India domestic)', rate: '2.0% + $0.00', on100: '$2.00', net100: '$98.00', guide: '/blog/razorpay-revenue-attribution/' },
+	{ gateway: 'PayPal (US checkout)', rate: '3.49% + $0.49', on100: '$3.98', net100: '$96.02', guide: '/docs/#payments' },
+	{ gateway: 'Gumroad (direct sales)', rate: '10.0% + $0.50', on100: '$10.50', net100: '$89.50', guide: '/docs/#payments' },
+	{ gateway: 'Cashfree (India domestic)', rate: '1.95% + $0.00', on100: '$1.95', net100: '$98.05', guide: '/docs/#payments' },
+];
+---
+
+<Page title={title} description={description}>
+	<SchemaJsonLd slot="head" type="webapp" title={title} description={description} url={canonicalURL} />
+	<SchemaJsonLd slot="head" type="breadcrumb" breadcrumbs={breadcrumbs} />
+
+	<main class="mx-auto max-w-[920px] px-5 pt-14 pb-24">
+		<nav aria-label="Breadcrumb" class="mb-8 text-[13px] text-ink-3">
+			<ol class="flex items-center gap-2">
+				<li><a href="/" class="hover:text-ink">Home</a></li>
+				<li aria-hidden="true">/</li>
+				<li class="text-ink-2" aria-current="page">Payment Fee Calculator</li>
+			</ol>
+		</nav>
+
+		<header class="mb-10">
+			<p class="eyebrow mb-3">Free tool</p>
+			<h1 class="text-[clamp(34px,5vw,52px)] font-semibold leading-[1.06] tracking-[-0.035em]">SaaS Payment Fee &amp; Analytics Cost Calculator</h1>
+			<p class="mt-4 max-w-[65ch] text-[19px] leading-relaxed text-ink-2">
+				Switch between Stripe, Paddle, Dodo Payments, Polar, PayPal, Razorpay, Cashfree, and Gumroad to estimate annual processing fees alongside first-year analytics plan costs—no signup required.
+			</p>
+		</header>
+
+		<section aria-label="Interactive calculator">
+			<h2 class="sr-only">Interactive payment fee and analytics cost calculator</h2>
+			<RoiCalculator client:load />
+		</section>
+
+		<section class="mt-16">
+			<h2 class="text-[28px] font-semibold tracking-[-0.02em]">How payment gateway fees affect net revenue</h2>
+			<p class="mt-3 text-[17px] leading-relaxed text-ink-2">
+				Gross analytics dashboards count the full charge before processor fees and tax. On a $29 SaaS sale, Stripe's 2.9% + $0.30 schedule takes $1.14 (3.9%) and Paddle's 5.0% + $0.50 schedule takes $1.95 (6.7%) before ad spend. Grosslytics applies each provider's published schedule (or PayPal and RevenueCat's actual webhook fee) automatically so every acquisition channel is ranked by net revenue.
+			</p>
+
+			<div class="mt-6 overflow-x-auto rounded-[20px] ring-1 ring-line">
+				<table class="w-full min-w-[540px] text-left text-[15px]">
+					<thead>
+						<tr class="bg-band text-[13px] text-ink-2">
+							<th scope="col" class="px-5 py-3 font-medium">Provider</th>
+							<th scope="col" class="px-5 py-3 font-medium">Grosslytics schedule</th>
+							<th scope="col" class="px-5 py-3 font-medium">Fee on $100 sale</th>
+							<th scope="col" class="px-5 py-3 font-medium">Net kept</th>
+							<th scope="col" class="px-5 py-3 font-medium">Setup guide</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-line">
+						{feeRates.map((r) => (
+							<tr>
+								<td class="px-5 py-3.5 font-medium">{r.gateway}</td>
+								<td class="px-5 py-3.5 text-ink-2">{r.rate}</td>
+								<td class="px-5 py-3.5 text-ink-2">{r.on100}</td>
+								<td class="px-5 py-3.5 font-semibold">{r.net100}</td>
+								<td class="px-5 py-3.5"><a href={r.guide} class="text-accent hover:underline">Setup ›</a></td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="mt-14 rounded-[28px] bg-band p-8 text-center">
+			<h2 class="text-[26px] font-semibold tracking-[-0.02em]">See net revenue per traffic source automatically</h2>
+			<p class="mt-2 text-ink-2">Connect your tracker and payment webhook in one Cloudflare deployment, or compare <a href="/compare/datafast-vs-databull/" class="text-accent hover:underline">DataFast vs DataBull vs Grosslytics</a>.</p>
+			<div class="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+				<a href="/start/" class="btn btn-primary">Start free</a>
+				<a href="/app/demo" class="btn-quiet text-[17px]">Explore the live demo ›</a>
+			</div>
+		</section>
+	</main>
+</Page>

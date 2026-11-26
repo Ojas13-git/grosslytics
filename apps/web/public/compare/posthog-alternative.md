@@ -1,58 +1,50 @@
-# PostHog vs Grosslytics: Focused Revenue Attribution
+---
+layout: "../../layouts/Article.astro"
+title: "PostHog Alternative: Focused SaaS Revenue Analytics"
+description: "Compare PostHog with Grosslytics for Stripe and multi-gateway revenue attribution: setup overhead, pricing, measured tracker size, and tradeoffs."
+primaryKeyword: "posthog alternative revenue analytics"
+format: "comparison"
+updatedDate: "2026-11-24"
+pubDate: "2026-11-08"
+---
 
-> Canonical URL: https://grosslytics.com/compare/posthog-alternative/ | Updated: 2026-11-10
-
-I'd choose PostHog when revenue analysis needs to sit alongside product behavior, experiments or replay. I'd consider Grosslytics for a focused source-to-payment dashboard and fee-adjusted revenue, provided you can do without those broader tools. PostHog can connect Stripe data, and not every report requires handwritten SQL.
+Choose **PostHog** if you want product telemetry, session replays, feature flags, and SQL insights inside one suite with a 1-million-event free analytics tier. Choose **Grosslytics** as a focused PostHog alternative when your main question is which traffic sources, blog posts, and AI answers generate paying customers after payment-gateway fees and ad spend, with a `1.8 KB` tracker and zero SQL setup.
 
 ## Key takeaways
 
-- PostHog's free allowance includes one million analytics events monthly, so a smaller paid tool is not automatically the cheaper choice.
-- Grosslytics lists $5.99/month for 100,000 hosted events, free source self-hosting and an optional $29 Lifetime license.
-- The measured local Grosslytics main tracker is 3,257 bytes raw and 1,580 bytes Brotli; no equivalent PostHog configuration was benchmarked.
-- Provider metadata, renewal behavior and refund coverage matter more than the time needed to paste a script tag.
+- PostHog includes **1 million free analytics events/month**, though session replay, feature flags, and data warehouse syncs carry separate usage limits.
+- PostHog retired its dedicated Revenue analytics dashboard; revenue fields now live inside Insights, SQL, and managed views, and native billing sync currently focuses on Stripe.
+- **Grosslytics** ships an out-of-the-box revenue attribution dashboard for 10 payment gateways, automatic fee and ad-spend profit views, and a **3,782-byte raw / 1,858-byte Brotli** tracker.
+- Grosslytics offers `$0` open-source Cloudflare self-hosting (`$29` Lifetime) or `$5.99/month` Cloud for 100,000 events.
 
-## When is focused revenue analytics enough?
+## When is focused revenue analytics better than PostHog?
 
-A focused tool is enough when your recurring question is which source brought paying customers and what remained after specified costs.
+If your product team needs funnel drop-offs inside an authenticated web app, session recordings, and A/B test flags, PostHog is built for that job. If you are a founder who mainly wants to see whether a blog post, Google ad, or ChatGPT mention produces net revenue after Stripe, Paddle, or Razorpay fees, configuring PostHog data pipelines and custom SQL dashboards adds maintenance you do not need.
 
-Grosslytics is our product. This comparison draws on vendor documentation checked on November 8, 2026, and the Grosslytics implementation; the recommendations reflect the use cases described below.
-
-Write the report you want before choosing the SDK: for example, paid customers, recorded revenue, estimated fees and entered ad spend by source. If that is the entire workflow, a broader product analytics stack may create configuration you do not need.
-
-If you also need feature adoption, activation cohorts or experiments, a separate revenue tool can fragment reporting. PostHog's broader scope may be the practical advantage.
+Grosslytics is our product; PostHog specifications reflect [PostHog's pricing](https://posthog.com/pricing) and [revenue analytics docs](https://posthog.com/docs/revenue-analytics) reviewed in November 2026.
 
 ## How do PostHog and Grosslytics compare?
 
-PostHog offers a configurable analytics platform, while Grosslytics packages a narrower attribution workflow.
-
-| Requirement | PostHog | Grosslytics |
+| Capability | PostHog | Grosslytics |
 | --- | --- | --- |
-| Main reason to choose it | Product behavior and revenue in the same platform | Source-to-payment reporting with fee and ad-spend views |
-| Stripe data | Payment-platform source and revenue events | Provider-specific webhook handling |
-| Reporting workflow | Insights, SQL, managed views and profiles | Prepared dashboard and API |
-| Experiments and feature flags | Platform capabilities with their own usage accounting | No equivalent experimentation platform claimed |
-| Session replay | Available with a separate recording allowance | No equivalent session replay claimed |
-| Revenue definition | Depends on the source, metrics and report | Gross, after stored fees, or after stored fees and supplied ad spend |
-| Browser payload | Depends on SDK version, build and enabled features | Local main build: 3,257 bytes raw; 1,580 bytes Brotli |
-| Hosted analytics allowance | 1M analytics events/month free | 100k events/month at listed $5.99 monthly plan |
-| Other usage charges | Separate product and source allowances | Self-host infrastructure separate from software license |
-| Self-hosting considered here | Cloud is evaluated in this comparison | Free open-source deployment; optional $29 Lifetime |
+| Primary focus | Product analytics, replay, flags & experiments | Source-to-payment attribution & net profit |
+| Billing integrations | Native Stripe data source + custom events | 10 signed webhooks (Stripe, Paddle, Razorpay, Polar, Dodo, PayPal, Cashfree, Gumroad, RevenueCat, Lemon Squeezy) |
+| Reporting workflow | Custom Insights, SQL, and managed views | Ready-made revenue, LTV, journey, and AI traffic dashboard |
+| Session replay & flags | Built in (separate free & paid allowances) | Not included (focused on marketing attribution & optional click map) |
+| Revenue definition | Raw synced properties / SQL queries | Gross, net (after gateway fees), and profit (after ad spend) |
+| Main tracker payload | Configurable JS SDK (`posthog-js`) | `g.js`: 3,782 bytes raw / 1,858 bytes Brotli |
+| Free allowance | 1M analytics events/month (Cloud) | Unlimited self-hosted on Cloudflare Free plan (footer credit required) |
+| Paid entry pricing | Usage-based past free allowances | `$29` once Lifetime or `$5.99/month` Cloud (100k events) |
 
-Sources: [PostHog pricing](https://posthog.com/pricing), [revenue reporting documentation](https://posthog.com/docs/revenue-analytics), [payment-platform support](https://posthog.com/docs/revenue-analytics/payment-platforms), [Grosslytics pricing](/#pricing) and [dashboard definitions](/docs#dashboard).
-
-The row marked “local main build” is our measurement of the current checkout, not a downloaded production benchmark. It excludes the optional click-map script and does not predict CPU time or end-user page speed.
-
-## What do the public product pages look like?
-
-These screenshots show the public interfaces available on November 8, 2026.
+## Public dashboard comparison
 
 ### PostHog
 
 <figure>
   <a href="/images/comparisons/posthog-homepage-2026-11-08.jpg" aria-label="Open full-size PostHog screenshot">
-    <img src="/images/comparisons/posthog-homepage-2026-11-08.jpg" alt="PostHog homepage showing its platform overview and illustrative AI analysis with sample data." width="1025" height="1226" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/posthog-homepage-2026-11-08.jpg" alt="PostHog homepage showing its platform overview and illustrative AI analysis with sample data." width="1025" height="1226" loading="eager" decoding="async" />
   </a>
-  <figcaption>PostHog — homepage with illustrative sample data. Captured November 8, 2026. <a href="https://posthog.com/">View source page</a>.</figcaption>
+  <figcaption>PostHog homepage with illustrative sample data. Captured November 8, 2026. <a href="https://posthog.com/">View source page</a>.</figcaption>
 </figure>
 
 ### Grosslytics
@@ -61,95 +53,60 @@ These screenshots show the public interfaces available on November 8, 2026.
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
+  <figcaption>Grosslytics public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
-## Does PostHog force you to write HogQL for revenue reporting?
+## Does PostHog require HogQL for revenue reporting?
 
-No: its current documentation describes revenue properties available through insights, SQL, managed views and profiles.
+Not strictly. While PostHog removed its standalone Revenue analytics dashboard, revenue properties remain queryable via standard Insights, managed views, and SQL. Native payment-platform syncing currently supports Stripe ([PostHog payment-platform docs](https://posthog.com/docs/revenue-analytics/payment-platforms)), whereas founders selling via Paddle, Razorpay, Dodo Payments, or Polar must build custom event pipelines.
 
-The dedicated Revenue analytics dashboard has been removed, so an old screenshot may not represent the present workflow. That change means you should test the reporting interface, rather than assume either a ready-made dashboard or a mandatory SQL project. [Source: current revenue analytics documentation](https://posthog.com/docs/revenue-analytics).
+## Measured Grosslytics script size
 
-PostHog's [payment-platform guide](https://posthog.com/docs/revenue-analytics/payment-platforms) currently supports Stripe as a revenue data source, with other listed platforms marked as coming soon. Existing PostHog users should evaluate that path before introducing another tracking system.
-
-## What do the script-size numbers actually prove?
-
-Our local measurement establishes the size of one Grosslytics build, not a universal size ratio against PostHog.
-
-On November 8, 2026, the main tracker built to 3,257 bytes raw and 1,580 bytes with Brotli quality 11, approximately 3.18 KiB and 1.54 KiB respectively. Reproduce it using the [Grosslytics repository](https://github.com/vidneat/grosslytics):
+Grosslytics keeps marketing pages lightweight by keeping the main tracker separate from the optional click-map script (`c.js`). Build output for `g.js` measures **3,782 bytes raw** and **1,858 bytes Brotli quality 11 (1.81 KB)**. Reproduce it locally from the [Grosslytics repository](https://github.com/vidneat/grosslytics):
 
 ```sh
 bun install
 bun run --cwd packages/tracker build
 ```
 
-The optional click-map script is separate. A fair size comparison would require equivalent builds and configurations.
+PostHog's payload depends on which `posthog-js` modules (autocapture, session replay, surveys) you bundle or load dynamically ([PostHog JS config](https://posthog.com/docs/libraries/js/config)).
 
-PostHog exposes configuration controls for autocapture, session recording and other behavior. Those choices matter when evaluating your actual deployment. [Source: JavaScript configuration](https://posthog.com/docs/libraries/js/config).
+## Is a smaller analytics tool always cheaper than PostHog?
 
-For a fair measurement:
+Not always on software licensing alone. For a site sending 100,000 events/month (80,000 pageviews plus 20,000 custom events), PostHog Cloud's 1M free event allowance costs `$0`, whereas Grosslytics Cloud is `$5.99/month` (`$71.88/year`).
 
-1. Record exact SDK versions and production builds.
-2. Fix the enabled features for each candidate.
-3. Report raw bytes and compressed transfer bytes separately.
-4. Include resources loaded after initialization.
-5. Measure execution time and requests on the same page and device.
+However, if you sync large data warehouse sources or turn on session replay across high-traffic marketing pages, PostHog bills per product meter. Self-hosting Grosslytics on Cloudflare keeps your software bill at `$0` (`$29` once for Lifetime without a footer link). Compare total margins with our [payment fee calculator](/tools/payment-fee-calculator/) and see [how to self-host on Cloudflare D1](/blog/cloudflare-d1-web-analytics/).
 
-## Is a smaller analytics product necessarily cheaper?
+## What revenue tracking tradeoffs apply to Grosslytics?
 
-No: a free allowance can make the broader product less expensive in software charges at your current usage.
+- **Net & profit scope:** Automatically deducts sales tax, gateway fee schedules (or real fees for PayPal/RevenueCat), and entered/CSV ad spend; excludes payroll and infra costs.
+- **Refunds:** Automatically deducts full refunds for Stripe, Paddle, Dodo, and Gumroad; partial refunds require manual reconciliation.
+- **Attribution:** Supports first-touch, last-touch, and 50/50 linear split rather than custom multi-touch algorithmic weighting.
+- **AI Search tracking:** Identifies ChatGPT, Perplexity, Claude, Gemini, and Copilot visits by referrer and `utm_source` tag, though private prompt text is never exposed by AI engines.
 
-For a hypothetical workload of 80,000 pageviews and 20,000 custom events, the basic analytics count is 100,000 events. That fits PostHog's published one-million-event free analytics allowance and Grosslytics' listed hosted allowance, assuming those are the actual events recorded.
+## How to trial Grosslytics alongside PostHog
 
-```text
-monthly_events = 80000 + 20000 = 100000
-grosslytics_hosted_annual = 12 * 5.99 = 71.88
-posthog_analytics_event_charge_within_free_allowance = 0
-```
+1. Keep PostHog running for in-app product behavior and feature flags.
+2. Deploy Grosslytics using the [self-hosting guide](/docs/#self-host) or [setup wizard](/start/).
+3. Connect visitor metadata (`gl_vid`) and webhooks following the [Stripe guide](/blog/stripe-revenue-attribution/) or [payments docs](/docs/#payments).
+4. Compare attributed revenue and net fees across channels using the [dashboard definitions](/docs/#dashboard).
 
-This is not a complete PostHog quote: data sources, recordings and other products have separate allowances and meters. Additional capture behavior can also change event volume, so price the implementation you will actually deploy.
-
-Grosslytics source self-hosting avoids a software subscription, but infrastructure and your operating time remain. The point of a focused dashboard is reduced reporting work if it matches your needs, rather than a guaranteed lowest bill.
-
-## What revenue and attribution limits should you expect?
-
-A focused dashboard still needs explicit definitions for fees, identity and subscription payments.
-
-Grosslytics estimates Stripe fees using a configured schedule and subtracts ad spend you enter or import. Its profit view excludes payroll, hosting and other operating costs; full Stripe refunds are handled, but partial Stripe refunds are not automatically deducted.
-
-Its attribution choices are first touch, last touch and a 50/50 split between those endpoints. That does not distribute credit across every intermediate visit.
-
-Grosslytics exposes recorded payments and renewal attribution, rather than a normalized MRR engine. It recognizes source and campaign evidence when available; it does not recover an exact AI search query that the referring service did not send.
-
-## How should you trial lightweight revenue analytics?
-
-Trial the required report and payment lifecycle before changing an existing product analytics setup.
-
-1. Write down one source-to-payment question.
-2. Configure visitor metadata using the [payment guide](/docs#payments).
-3. Complete a checkout from a tagged source.
-4. Check a renewal, a full refund and a partial refund.
-5. Reconcile source revenue and estimated fees with provider records.
-6. Decide whether keeping product analytics alongside attribution is useful.
-
-No 90-second setup guarantee is made: deployment, checkout metadata and reconciliation take different amounts of work across applications. See the [self-hosting guide](/docs#self-host) if you plan to operate the service yourself.
-
-A focused tool is worthwhile when it answers the required report with less ongoing work. Next, run one real payment lifecycle through your candidate and inspect the resulting source report.
+Also see how Grosslytics compares in [Plausible vs Grosslytics](/compare/plausible-alternative/), [GA4 vs Grosslytics](/compare/ga4-alternative/), and [7 DataFast Alternatives](/compare/datafast-alternative/).
 
 ## Frequently asked questions
 
 ### Can PostHog track Stripe revenue?
 
-Yes. Its payment-platform documentation supports Stripe data, and revenue can be analyzed through available reporting surfaces. Review source usage charges and identity matching for your setup.
+Yes. PostHog supports Stripe as a revenue data source and allows custom purchase events inside Insights and SQL views.
 
 ### Is Grosslytics always cheaper than PostHog?
 
-No. PostHog includes one million free analytics events per month, while Grosslytics' hosted plan lists $5.99/month for 100,000 events. Compare all required products, infrastructure and reporting work.
+No. PostHog's 1M monthly analytics events are free on Cloud, while Grosslytics Cloud starts at `$5.99/month` for 100,000 events. Grosslytics becomes free when self-hosted on your own Cloudflare Free account.
 
-### Is Grosslytics a full replacement for PostHog?
+### Should I replace PostHog with Grosslytics completely?
 
-Only if your requirements fit its narrower scope. Grosslytics does not offer equivalent session replay, experimentation or feature-flag capabilities.
+Only if you do not need session replays, feature flags, or product experiments. Many SaaS teams use Grosslytics for lightweight marketing attribution and net revenue on public pages while keeping product analytics inside the app.
 
-### Can Grosslytics reveal every AI search query that caused a sale?
+### Can Grosslytics reveal the exact ChatGPT prompt that led to a sale?
 
-No. It can report source and campaign information available to the tracker and payment attribution, but cannot recover a query that was never supplied by the referring service.
+No analytics tool can see private AI chat prompts; Grosslytics reports the AI source (`chatgpt.com`, `perplexity.ai`, etc.), landing page, reading time, and revenue generated.

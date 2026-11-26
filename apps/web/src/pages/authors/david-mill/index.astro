@@ -1,22 +1,43 @@
 ---
 import Page from '../../../layouts/Page.astro';
+import SchemaJsonLd from '../../../components/seo/SchemaJsonLd.astro';
 import type { MarkdownInstance } from 'astro';
 
-const articles = Object.values(import.meta.glob<MarkdownInstance<{ title: string; description: string }>>(['../../blog/*.md', '../../compare/*.md'], { eager: true }))
-	.sort((a, b) => a.frontmatter.title.localeCompare(b.frontmatter.title));
+const mdItems = Object.values(import.meta.glob<MarkdownInstance<{ title: string; description: string }>>(['../../blog/*.md', '../../compare/*.md'], { eager: true })).map((article) => ({
+	href: `${article.url}/`,
+	title: article.frontmatter.title,
+	description: article.frontmatter.description,
+}));
+const articles = [
+	...mdItems,
+	{
+		href: '/compare/ga4-alternative/',
+		title: 'Google Analytics 4 Alternative for SaaS Revenue Attribution',
+		description: 'Compare Google Analytics 4 purchase events with Grosslytics payment webhooks. See what each tool measures and how to verify net revenue by channel.',
+	},
+].sort((a, b) => a.title.localeCompare(b.title));
+
 const profile = {
 	'@context': 'https://schema.org',
 	'@type': 'Person',
 	name: 'David Mill',
 	jobTitle: 'Founder',
-	worksFor: { '@type': 'Organization', name: 'Grosslytics', url: 'https://grosslytics.com' },
+	worksFor: { '@type': 'Organization', name: 'Grosslytics', url: 'https://grosslytics.com/' },
 	url: 'https://grosslytics.com/authors/david-mill/',
 	sameAs: ['https://www.linkedin.com/in/david-mill/', 'https://x.com/handancorp'],
 };
+const breadcrumbs = [
+	{ name: 'Home', item: 'https://grosslytics.com/' },
+	{ name: 'Blog', item: 'https://grosslytics.com/blog/' },
+	{ name: 'David Mill', item: 'https://grosslytics.com/authors/david-mill/' },
+];
 ---
 
 <Page title="David Mill, Founder of Grosslytics" description="David Mill is the founder of Grosslytics. Find his revenue attribution and analytics implementation guides.">
-	<script type="application/ld+json" set:html={JSON.stringify(profile)} slot="head" />
+	<Fragment slot="head">
+		<script type="application/ld+json" set:html={JSON.stringify(profile)} />
+		<SchemaJsonLd type="breadcrumb" breadcrumbs={breadcrumbs} />
+	</Fragment>
 	<main class="mx-auto max-w-3xl px-5 py-16">
 		<p class="text-sm text-ink-2"><a href="/blog/" class="underline">Blog</a> / Author</p>
 		<h1 class="mt-5 text-4xl font-semibold tracking-tight">David Mill</h1>
@@ -28,10 +49,12 @@ const profile = {
 		</ul>
 		<h2 class="mt-12 text-2xl font-semibold">Articles</h2>
 		<ul class="mt-4">
-			{articles.map(article => <li class="border-b border-line py-5">
-				<h3 class="text-lg font-medium"><a class="underline" href={`${article.url}/`}>{article.frontmatter.title}</a></h3>
-				<p class="mt-2 text-ink-2">{article.frontmatter.description}</p>
-			</li>)}
+			{articles.map((article) => (
+				<li class="border-b border-line py-5">
+					<h3 class="text-lg font-medium"><a class="underline" href={article.href}>{article.title}</a></h3>
+					<p class="mt-2 text-ink-2">{article.description}</p>
+				</li>
+			))}
 		</ul>
 	</main>
 </Page>

@@ -3,11 +3,14 @@ interface Props {
 	title: string;
 	description: string;
 	ogImage?: string;
+	ogType?: 'website' | 'article';
+	publishedTime?: string;
+	modifiedTime?: string;
 	noindex?: boolean;
 	schema?: Record<string, unknown>[];
 }
 
-const { title, description, ogImage, noindex = false, schema = [] } = Astro.props;
+const { title, description, ogImage, ogType = 'website', publishedTime, modifiedTime, noindex = false, schema = [] } = Astro.props;
 const cleanPath = Astro.url.pathname.replace(/\/+$/, '') || '/';
 const siteOrigin = Astro.site?.toString() || 'https://grosslytics.com';
 // Pages are served at /path/ (the host redirects /path there), so that is the address search engines are given
@@ -22,7 +25,7 @@ const resolvedOgImage = ogImage || new URL(`/og${cleanPath === '/' || !Astro.isP
 <meta name="description" content={description} />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-<link rel="canonical" href={canonicalURL} />
+{!noindex && <link rel="canonical" href={canonicalURL} />}
 
 {noindex ? (
 	<meta name="robots" content="noindex, nofollow" />
@@ -31,15 +34,22 @@ const resolvedOgImage = ogImage || new URL(`/og${cleanPath === '/' || !Astro.isP
 )}
 
 <!-- OpenGraph / X Cards -->
-<meta property="og:type" content="website" />
-<meta property="og:url" content={canonicalURL} />
+<meta property="og:site_name" content="Grosslytics" />
+<meta property="og:type" content={ogType} />
+{!noindex && <meta property="og:url" content={canonicalURL} />}
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />
 <meta property="og:image" content={resolvedOgImage} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content={title} />
+{ogType === 'article' && publishedTime && <meta property="article:published_time" content={publishedTime} />}
+{ogType === 'article' && (modifiedTime || publishedTime) && <meta property="article:modified_time" content={modifiedTime || publishedTime} />}
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content={title} />
 <meta name="twitter:description" content={description} />
 <meta name="twitter:image" content={resolvedOgImage} />
+<meta name="twitter:image:alt" content={title} />
 
 <!-- Structured Data (JSON-LD) -->
 {schema.map((item) => (

@@ -1,55 +1,101 @@
 ---
 import Page from '../../layouts/Page.astro';
 import DashboardIsland from '../../components/dashboard/DashboardIsland.tsx';
+import type { DashboardData } from '@grosslytics/shared/dashboard';
+import { formatMoney } from '@grosslytics/shared/money';
 
 export const prerender = false;
 
-const domain = Astro.params.domain || 'shipfast.io';
-const badgePath = `/badge/${encodeURIComponent(domain)}.svg`;
+const rawDomain = (Astro.params.domain || '').trim().toLowerCase();
+const validDomain = /^(?=.{1,253}$)(localhost|([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,})$/.test(rawDomain);
+
+let shareData: DashboardData | null = null;
+if (validDomain) {
+	const api = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:8787' : Astro.url.origin);
+	try {
+		const res = await fetch(`${api}/api/share/${encodeURIComponent(rawDomain)}?range=30d&model=first&mode=net`, {
+			signal: AbortSignal.timeout(3000),
+		});
+		if (res.ok) shareData = (await res.json()) as DashboardData;
+	} catch {
+		shareData = null;
+	}
+}
+
+if (!shareData) {
+	Astro.response.status = 404;
+}
+
+const badgePath = `/badge/${encodeURIComponent(rawDomain)}.svg`;
+const net30d = shareData ? formatMoney(shareData.totals.revenue, shareData.currency) : '';
+const sales30d = shareData ? shareData.totals.sales.toLocaleString('en-US') : '0';
+const visitors30d = shareData ? shareData.totals.visitors.toLocaleString('en-US') : '0';
 ---
 
-<Page
-	title={`${domain} — Public Revenue on Grosslytics`}
-	description={`Revenue, net profit, and channel attribution shared by the owner of ${domain}.`}
->
-	<main class="bg-canvas px-5 pt-16 pb-24">
-		<div class="mx-auto max-w-[1100px]">
-			<header class="mb-10 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-				<div>
-					<p class="eyebrow mb-2">Public revenue page</p>
-					<h1 class="text-[clamp(36px,5vw,56px)] font-semibold leading-none tracking-[-0.035em]">{domain}</h1>
-					<p class="mt-3 text-ink-2">Revenue shared by the site owner.</p>
-				</div>
+{shareData ? (
+	<Page
+		title={`${rawDomain} — Public Revenue on Grosslytics`}
+		description={`Verified 30-day net revenue (${net30d}), ${sales30d} sales, and channel attribution shared by ${rawDomain} on Grosslytics.`}
+	>
+		<main class="bg-canvas px-5 pt-16 pb-24">
+			<div class="mx-auto max-w-[1100px]">
+				<header class="mb-10 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+					<div>
+						<p class="eyebrow mb-2">Public revenue page</p>
+						<h1 class="text-[clamp(36px,5vw,56px)] font-semibold leading-none tracking-[-0.035em]">{rawDomain}</h1>
+						<p class="mt-3 text-ink-2">
+							Revenue shared by the site owner · Last 30 days: <strong class="font-semibold text-ink">{net30d} net</strong> across {sales30d} {shareData.totals.sales === 1 ? 'sale' : 'sales'} and {visitors30d} {shareData.totals.visitors === 1 ? 'visitor' : 'visitors'}.
+						</p>
+					</div>
 
-				<div class="flex items-center gap-3 rounded-2xl bg-card p-3 ring-1 ring-line">
-					<img src={`${badgePath}?v=3`} alt="Public revenue badge" height="32" class="h-8 w-auto" />
-					<button
-						type="button"
-						class="btn btn-quiet !px-3 !py-1.5 !text-[13px]"
-						data-copy-badge={`<img src="https://grosslytics.com${badgePath}" alt="Public revenue on Grosslytics"/>`}
-					>
-						Copy embed
-					</button>
-				</div>
-			</header>
+					<div class="flex items-center gap-3 rounded-2xl bg-card p-3 ring-1 ring-line">
+						<img src={`${badgePath}?v=3`} alt={`Public 30-day net revenue badge for ${rawDomain}`} height="32" class="h-8 w-auto" />
+						<button
+							type="button"
+							class="btn btn-quiet !px-3 !py-1.5 !text-[13px]"
+							data-copy-badge={`<img src="https://grosslytics.com${badgePath}" alt="Public revenue on Grosslytics"/>`}
+						>
+							Copy embed
+						</button>
+					</div>
+				</header>
 
-			<DashboardIsland client:only="react" source="share" site={domain} />
+				<DashboardIsland client:only="react" source="share" site={rawDomain} />
 
-			<p class="mt-6 text-center text-[13px] text-ink-3">
-				Want a page like this? <a href="/start/" class="text-accent hover:underline">Track your startup with Grosslytics ›</a>
+				<p class="mt-6 text-center text-[13px] text-ink-3">
+					Want a page like this? <a href="/start/" class="text-accent hover:underline">Track your startup with Grosslytics ›</a>
+				</p>
+			</div>
+		</main>
+
+		<!-- Copy via data attribute: untrusted `domain` never reaches inline JS -->
+		<script>
+			import { copyText } from '../../lib/clipboard';
+			for (const b of document.querySelectorAll<HTMLButtonElement>('[data-copy-badge]')) {
+				b.addEventListener('click', async () => {
+					if (!(await copyText(b.dataset.copyBadge || ''))) return;
+					b.textContent = 'Copied';
+					setTimeout(() => (b.textContent = 'Copy embed'), 1500);
+				});
+			}
+		</script>
+	</Page>
+) : (
+	<Page
+		title="Public revenue page not found — Grosslytics"
+		description="This domain does not have a public revenue page enabled on Grosslytics."
+		noindex
+	>
+		<main class="mx-auto max-w-[640px] px-5 pt-20 pb-28 text-center">
+			<p class="eyebrow mb-3">404</p>
+			<h1 class="text-[clamp(34px,5vw,48px)] font-semibold leading-[1.08] tracking-[-0.03em]">No public revenue page.</h1>
+			<p class="mt-4 text-[17px] leading-relaxed text-ink-2">
+				This domain has not enabled public revenue sharing on Grosslytics, or the address does not exist.
 			</p>
-		</div>
-	</main>
-
-	<!-- Copy via data attribute: untrusted `domain` never reaches inline JS -->
-	<script>
-		import { copyText } from '../../lib/clipboard';
-		for (const b of document.querySelectorAll<HTMLButtonElement>('[data-copy-badge]')) {
-			b.addEventListener('click', async () => {
-				if (!(await copyText(b.dataset.copyBadge || ''))) return;
-				b.textContent = 'Copied';
-				setTimeout(() => (b.textContent = 'Copy embed'), 1500);
-			});
-		}
-	</script>
-</Page>
+			<div class="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+				<a href="/app/demo" class="btn btn-primary">Explore the live demo</a>
+				<a href="/start/" class="btn-quiet text-[16px]">Track your startup free ›</a>
+			</div>
+		</main>
+	</Page>
+)}

@@ -1,42 +1,40 @@
 ---
 layout: "../../layouts/Article.astro"
-title: "How to Track Stripe Revenue by Traffic Source"
-description: "Connect Stripe Checkout and Payment Links to visitor sources, configure signed webhooks and verify fees, renewals and attribution limits in Grosslytics."
-primaryKeyword: "stripe revenue attribution analytics"
+title: "How to Track Stripe Revenue by UTM & Traffic Source"
+description: "Connect Stripe Checkout and Payment Links to UTMs and visitor sources, configure signed webhooks, and track fees, renewals, and refunds in Grosslytics."
+primaryKeyword: "stripe utm revenue tracking"
 format: "how-to"
 visualReview: {"decision":"include-screenshots","reason":"Real public provider documentation screenshots explain the checkout identity fields; demo views are labeled and do not imply a live payment test."}
-updatedDate: "2026-11-10"
+updatedDate: "2026-11-25"
 pubDate: "2026-11-08"
 ---
 
-I recommend carrying the tracked visitor ID into Stripe Checkout as client_reference_id and matching verified payment events to that visitor. Grosslytics decorates supported Payment Links automatically, while server-created Checkout Sessions need you to pass the identifier yourself. I would check renewals as well as the first payment before using the report to compare acquisition channels.
+I recommend carrying the tracked visitor ID into Stripe Checkout as `client_reference_id` and matching verified payment events to that visitor in Grosslytics. Payment Links are decorated automatically by `g.js`, while server-created Checkout Sessions pass the ID via metadata so initial sales, renewals, and full refunds tie back to the exact traffic source.
 
 ## Key takeaways
 
-- Use the same visitor ID on the tracked site and the payment; a UTM on the success page alone does not reconstruct the original journey.
-- Payment Links use client_reference_id; server-created subscriptions also need metadata designed for later invoices.
-- Configure snapshot webhook payloads and validate their actual API-version shape, including renewal metadata.
-- Grosslytics estimates Stripe fees from its configured schedule; recorded payments are not normalized MRR or complete business net profit.
+- Keep the same visitor ID (`gl_vid`) on the landing page and the Stripe checkout; a UTM on the success page alone loses the first-touch channel.
+- Payment Links use `client_reference_id`; server-created subscriptions should also attach `visitor_id` to `subscription_data.metadata` for renewal invoices.
+- Configure snapshot webhook payloads in Stripe and test both initial checkouts and subscription renewals against your webhook API version.
+- Grosslytics estimates Stripe fees using the standard schedule (previewable in the [payment fee calculator](/tools/payment-fee-calculator/)) and deducts full refunds automatically.
 
 ## What do you need before connecting Stripe?
 
-You need a tracked website, a Grosslytics site ID, a working Stripe checkout and a reachable attribution endpoint.
+You need a tracked website, a Grosslytics site ID, a working Stripe checkout, and a reachable webhook endpoint.
 
-The examples follow Stripe’s documentation and the Grosslytics implementation. Before relying on them for live payments, run a test transaction and check the webhook payload you receive.
+This guide follows Stripe's documentation and the Grosslytics webhook handler. Before turning it on for production traffic, run one test-mode purchase and inspect the recorded source in your dashboard.
 
-This workflow connects evidence from a visit to evidence from a payment. It cannot recover a referrer, campaign or search query that was never recorded, and a browser visitor ID is an attribution identifier rather than an authentication credential.
-
-1. Add your site using the [setup flow](/start/).
+1. Add your site in the [Grosslytics setup wizard](/start/).
 2. Set the site's reporting currency to match your Stripe charges.
 3. Choose Payment Links or server-created Checkout Sessions.
-4. Identify the destination domain serving your Grosslytics API.
-5. Use Stripe test mode before changing the live integration.
+4. Confirm your Grosslytics API URL is reachable by Stripe webhooks.
+5. Keep Stripe test mode enabled until one purchase attributes cleanly.
 
-See the [tracker installation guide](/docs#install) for Content Security Policy settings, domains and self-hosted API routing.
+See the [tracker installation guide](/docs/#install) for Content Security Policy headers and self-hosted API routing. If you are comparing tools for Stripe attribution, see how Grosslytics stacks up in our [DataFast alternatives guide](/compare/datafast-alternative/).
 
 ## Step 1: How do you record the visit and carry its identity?
 
-Install the tracker on the acquisition page, then keep the same visitor ID when the customer starts checkout.
+Install `g.js` on your acquisition pages so every visit generates a visitor ID before the user clicks checkout.
 
 ```html
 <script defer src="https://grosslytics.com/g.js"
@@ -45,12 +43,12 @@ Install the tracker on the acquisition page, then keep the same visitor ID when 
 <a href="https://buy.stripe.com/YOUR_PAYMENT_LINK">Subscribe</a>
 ```
 
-Replace the placeholders and, for self-hosting, use your own tracker domain. Grosslytics appends client_reference_id to supported anchor links when that parameter is absent; an existing value is preserved, so inspect links that already use the field for another purpose.
+Replace the placeholders and, when self-hosting, point `src` to your own analytics hostname. Grosslytics appends `client_reference_id` to Stripe Payment Link anchors automatically when that parameter is absent, leaving any existing `client_reference_id` intact.
 
-For server-created checkouts, read the ID in the browser after the tracker has loaded and send it with your application's checkout request:
+For server-created Checkout Sessions, read the visitor ID from browser storage after `g.js` loads and send it with your checkout request:
 
 ```js
-// Browser: run from the checkout button after your page has loaded.
+// Browser: run from your checkout button after the page loads.
 let visitorId = null;
 try { visitorId = localStorage.getItem('gl_vid'); } catch {}
 
@@ -64,22 +62,22 @@ const { url } = await response.json();
 window.location.assign(url);
 ```
 
-If tracking is unavailable, let the customer purchase and accept that the payment may be unattributed. Choose prices and authorize the purchase on the server; do not treat browser-supplied analytics metadata as proof of who may buy what.
+If `gl_vid` is unavailable (for example, strict storage blocking), let checkout proceed so you never block a customer purchase.
 
 ## Step 2: How do you attach the ID to Stripe Checkout?
 
-For Payment Links, inspect the decorated URL; for a server-created session, pass client_reference_id explicitly.
+For Payment Links, inspect the decorated URL on hover; for server-created sessions, pass `client_reference_id` and `metadata.visitor_id` explicitly.
 
-Stripe documents that the Payment Link reference reaches checkout.session.completed. That identifies the initial checkout; it does not by itself establish a visitor mapping on every future invoice. [Source: Payment Link URL parameters](https://docs.stripe.com/payment-links/url-parameters).
+Stripe passes `client_reference_id` to `checkout.session.completed`, which handles the initial purchase. For recurring subscriptions, also set `subscription_data.metadata` so downstream renewal invoices stay linked to the buyer. [Source: Stripe Payment Link URL parameters](https://docs.stripe.com/payment-links/url-parameters).
 
 <figure>
   <a href="/images/comparisons/stripe-2026-11-08-2e93d133b219.jpg" aria-label="Open full-size Stripe screenshot">
-    <img src="/images/comparisons/stripe-2026-11-08-2e93d133b219.jpg" alt="Stripe documentation showing client_reference_id for Payment Link reconciliation." width="1280" height="720" loading="lazy" decoding="async" />
+    <img src="/images/comparisons/stripe-2026-11-08-2e93d133b219.jpg" alt="Stripe documentation showing client_reference_id for Payment Link reconciliation." width="1280" height="720" loading="eager" decoding="async" />
   </a>
   <figcaption>Public Stripe documentation for the client reference field used to connect a Payment Link checkout to a visitor. Captured 2026-11-08. <a href="https://docs.stripe.com/payment-links/url-parameters#streamline-reconciliation-with-a-url-parameter">Source: Stripe</a>.</figcaption>
 </figure>
 
-In your existing server checkout handler, with an initialized Stripe server SDK, a validated request body and a server-selected recurring price:
+Inside your server checkout endpoint:
 
 ```js
 // Server only: inside your authenticated checkout route.
@@ -101,92 +99,90 @@ const session = await stripe.checkout.sessions.create({
 // Return session.url to the browser from your framework's response handler.
 ```
 
-For a one-time price, use payment mode and omit subscription_data. Keep the API secret in your server environment. [Source: Checkout Session creation](https://docs.stripe.com/api/checkout/sessions/create).
+For a one-time payment, switch `mode` to `'payment'` and omit `subscription_data`. [Source: Stripe Checkout Session API](https://docs.stripe.com/api/checkout/sessions/create).
 
-Stripe's current metadata documentation places subscription metadata on invoices under parent.subscription_details.metadata. The current Grosslytics invoice extractor reads invoice.metadata and the older subscription_details.metadata shape, so inspect actual renewal payloads before relying on direct metadata matching; a previously matched buyer email can provide a separate fallback. [Source: metadata propagation](https://docs.stripe.com/metadata).
+Stripe places subscription metadata on invoices under `parent.subscription_details.metadata` in newer API versions. Grosslytics reads `invoice.metadata` and `subscription_details.metadata`, and falls back to matching returning buyers by email if metadata is absent. [Source: Stripe metadata propagation](https://docs.stripe.com/metadata).
 
 ## Step 3: Which webhook events should you configure?
 
-Send signed snapshot events to the Stripe webhook endpoint and save that destination's signing secret in Grosslytics Payments settings.
+Send signed snapshot events to the Grosslytics Stripe endpoint and save that destination's signing secret in Payments settings.
 
 ```text
 https://YOUR_ANALYTICS_DOMAIN/api/webhooks/stripe?siteId=YOUR_SITE_ID
 ```
 
-| Event | Current Grosslytics use | What to verify |
+| Event | What Grosslytics records | What to verify |
 | --- | --- | --- |
-| checkout.session.completed | Records a checkout only when payment_status is paid | Visitor reference and initial payment amount |
-| invoice.paid | Records invoice payments and marks subscription_cycle as renewal | Metadata shape, buyer matching and no duplicate initial charge |
-| invoice_payment.paid | Connects invoice and PaymentIntent references | Correct association with the original invoice |
-| charge.refunded | Applies supported full refunds | Full refund is reflected; partial refunds are not automatically deducted |
+| `checkout.session.completed` | Records the initial checkout when `payment_status` is `paid` | Visitor reference and net amount |
+| `invoice.paid` | Records invoice payments and marks `subscription_cycle` as renewal | Metadata shape and no duplicate initial charge |
+| `invoice_payment.paid` | Links invoice and PaymentIntent IDs | Matching invoice association |
+| `charge.refunded` | Deducts full refunds from channel revenue | Refund reflected in red on dashboard |
 
-Stripe offers thin and snapshot event formats; Grosslytics' current extractor expects the expanded data.object snapshot shape. Match the endpoint's API version to the payload you have tested. [Source: Stripe webhook configuration](https://docs.stripe.com/webhooks).
+Select Stripe's snapshot event payload format (not thin payloads) because Grosslytics reads the expanded `data.object` payload. [Source: Stripe webhook configuration](https://docs.stripe.com/webhooks).
 
-Delayed payment methods need additional attention: the current handler ignores unpaid Checkout completions and does not handle checkout.session.async_payment_succeeded. Do not treat an unhandled asynchronous payment as an attributed success.
+Grosslytics ignores unpaid sessions and does not currently ingest `checkout.session.async_payment_succeeded` for delayed payment methods such as ACH or SEPA debit.
 
 ## How do you verify Stripe revenue attribution end to end?
 
-Follow one tagged visit through payment and compare the source report with the provider's event record.
+Test one tagged visit through Stripe checkout and reconcile the recorded sale against your Stripe Dashboard event log.
 
-Use a campaign URL such as:
+Open a tagged URL in a fresh browser window:
 
 ```text
-https://your-site.example/blog/stripe-guide?utm_source=newsletter&utm_medium=email&utm_campaign=launch
+https://your-site.example/blog/track-chatgpt-traffic-revenue/?utm_source=newsletter&utm_medium=email&utm_campaign=launch
 ```
 
-Complete a test purchase in the same browser. Confirm one payment, the expected source, matching currency and the selected attribution model; then test a renewal and full refund separately.
+Complete a test purchase in the same browser, then verify that the sale credits `newsletter`, matches your site currency, and updates cleanly across first-touch, last-touch, and linear views. For a full worked sandbox run with `utm_source=chatgpt.com`, see our [ChatGPT revenue tracking walkthrough](/blog/track-chatgpt-traffic-revenue/).
 
 <figure>
   <a href="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" aria-label="Open full-size Grosslytics screenshot">
     <img src="/images/comparisons/grosslytics-public-demo-2026-11-08.jpg" alt="Grosslytics public demo showing first-touch net revenue, a daily chart and source reports." width="1010" height="1209" loading="lazy" decoding="async" />
   </a>
-  <figcaption>Grosslytics — public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
+  <figcaption>Grosslytics public demo with sample data. Captured November 8, 2026. <a href="https://grosslytics.com/app/demo">View source page</a>.</figcaption>
 </figure>
 
-The [dashboard definitions](/docs#dashboard) explain first touch, last touch and the 50/50 endpoint split. A page's associated revenue is not an exclusive allocation across all pages, so do not add page rows together as if each payment belonged to exactly one page.
+The [dashboard definitions](/docs/#dashboard) explain first touch, last touch, and the 50/50 linear split. Because a buyer can read multiple pages before paying, per-page revenue counts each page that participated in the journey rather than splitting a single sale exclusively across pages.
 
-## How should you interpret the Stripe fee deduction?
+## How does Grosslytics calculate net Stripe revenue?
 
-Treat the fee as an estimate from the configured schedule, then reconcile against actual Stripe settlement records.
+Grosslytics removes reported sales tax first, then deducts its default Stripe fee schedule (2.9% + $0.30) to show net channel revenue without manual spreadsheets.
 
-The current Grosslytics default is 2.9% plus $0.30 in its USD-oriented fee schedule. For an illustrative $100 charge without tax, that produces $3.20 of estimated fees and $96.80 after fees.
+For a $100 charge with no tax, Grosslytics records $3.20 in estimated fees and $96.80 in net revenue:
 
 ```text
 estimated_fee = round(10000 * 290 / 10000) + 30 = 320 cents
 net_after_estimated_fee = 10000 - 320 = 9680 cents
 ```
 
-That default is not a universal Stripe rate: payment method, geography, currency, contract terms and extra charges can change the actual fee. The fixed minor-unit assumption also needs review outside USD, and the site's reporting currency must match the payment because Grosslytics does not convert it.
+Because international cards, currency conversion, and Stripe Billing fees vary by region and contract, reconcile totals against your Stripe payout reports before accounting. Each Grosslytics site reports in one currency (USD, EUR, GBP, or INR) and rejects payments in other currencies rather than converting them. You can model fee impacts across gateways with the [SaaS payment fee calculator](/tools/payment-fee-calculator/) or see how this differs from event-only tools in our [Plausible revenue comparison](/compare/plausible-alternative/).
 
-Recorded subscription receipts are different from normalized MRR. The profit display additionally subtracts supplied ad spend, while excluding other operating costs.
+## What should you check when a Stripe payment is unattributed?
 
-## What should you check when a payment is unattributed?
+Walk through this checklist whenever a recorded Stripe sale appears under Unattributed:
 
-Check that the visitor existed before checkout and that the payment event carries an identifier the extractor can read.
+1. Confirm `g.js` returned `202 Accepted` on the landing page (check Content Security Policy headers).
+2. Inspect the Checkout link or `checkout.sessions.create` payload for `client_reference_id` or `metadata.visitor_id`.
+3. Verify the webhook signing secret in Grosslytics matches the Stripe endpoint secret.
+4. Check whether the Stripe webhook API version uses `parent.subscription_details.metadata` for renewals.
+5. Confirm the payment currency matches the site's reporting currency (mismatches return `HTTP 422`).
+6. Test in a normal browser tab rather than WebDriver automation, which `g.js` filters as a bot.
 
-1. Confirm the tracker request succeeded on the acquisition page.
-2. Inspect the checkout reference without exposing API secrets.
-3. Check webhook signature verification and delivery status.
-4. Compare the actual invoice API version and metadata path.
-5. Check currency rejection and the payment's amount/status.
-6. Test a fresh browser separately from a returning buyer.
-
-Use the [payment integration reference](/docs#payments) for the current endpoint fields. Next, reconcile one initial charge, renewal and full refund before enabling the workflow for live reporting.
+Review the [payment integration reference](/docs/#payments) for all supported Stripe parameters and webhook endpoints.
 
 ## Frequently asked questions
 
 ### Does client_reference_id automatically track every renewal?
 
-No. It links the Checkout Session. Later invoices require a usable metadata path or another supported buyer match; verify the actual Stripe API-version payload and a real test renewal.
+No. It links the initial Checkout Session. Add `visitor_id` to `subscription_data.metadata` (or rely on email matching for returning customers) so subsequent `invoice.paid` events credit the original source.
 
-### Can I promise setup in three minutes?
+### Does Grosslytics work with Stripe Payment Links without backend code?
 
-No fixed time is established here. Pasting the tracker is short, but configuring checkout, webhooks and lifecycle validation depends on your application.
+Yes. When `g.js` runs on your site, it appends `?client_reference_id=<visitor_id>` to any `buy.stripe.com` link automatically, and Stripe includes that value in the `checkout.session.completed` webhook.
 
 ### Does Grosslytics read my exact Stripe processing fee?
 
-The current Stripe integration calculates an estimate using its configured fee schedule. Reconcile it with actual provider fees, particularly outside the USD domestic-card example.
+Grosslytics estimates Stripe fees using the standard 2.9% + $0.30 schedule after removing sales tax, so international or custom-rate accounts should reconcile exact payouts in Stripe.
 
 ### Are all Stripe payment methods covered by these events?
 
-No. Delayed payment methods can complete asynchronously, and the current Grosslytics handler does not process checkout.session.async_payment_succeeded. Test method-specific behavior before relying on the report.
+Instant methods (cards, Apple Pay, Google Pay, Link) complete inside `checkout.session.completed` with `payment_status: "paid"`. Delayed methods such as ACH or SEPA that settle asynchronously via `checkout.session.async_payment_succeeded` are not ingested yet.

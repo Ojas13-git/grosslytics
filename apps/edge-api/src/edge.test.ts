@@ -1316,8 +1316,11 @@ test('footer link: free installs accept qualified links and relock when the link
 	const realFetch = globalThis.fetch;
 	let html = '<footer><a href="https://grosslytics.com/"></a><a href="https://example.com/grosslytics.com">Grosslytics</a></footer>';
 	let down = false;
-	globalThis.fetch = (async (url: string) => {
-		if (String(url).startsWith('https://cloudflare-dns.com/dns-query?')) return Response.json({ Status: 0, Answer: [{ type: 1, data: '1.1.1.1' }] });
+	globalThis.fetch = (async (url: string, init: RequestInit) => {
+		if (String(url).startsWith('https://cloudflare-dns.com/dns-query?')) {
+			expect(init.redirect).toBe('manual');
+			return Response.json({ Status: 0, Answer: [{ type: 1, data: '1.1.1.1' }] });
+		}
 		expect(String(url)).toBe('https://acme.io/');
 		return down ? new Response('', { status: 503 }) : new Response(html, { headers: { 'content-type': 'text/html' } });
 	}) as any;
